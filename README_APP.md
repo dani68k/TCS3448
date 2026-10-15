@@ -1,194 +1,240 @@
-# ATLANTES / TCS3448 — Aplicación FW + BLE + Web
+﻿# TCS3448 — Aplicación FW + BLE + Web
 
-Aplicación para adquirir los canales espectrales de un TCS3448 desde un ESP32 y
-consultarlos en un navegador mediante BLE. El firmware controla el sensor por I2C;
-la página permite conectar, iniciar/parar la adquisición y mostrar muestras y
-configuración. La comunicación con el ESP32 no necesita Wi-Fi ni un servidor web.
+Aplicación de caracterización y control del TCS3448 sobre ESP32, PlatformIO y
+Arduino. El hito 4 añade un panel de setup remoto al flujo de adquisición debug.
+La Web configura y muestra ADC crudos: no implementa análisis, gráficas,
+normalización, calibración, DARK/REFERENCE, CSV ni almacenamiento histórico.
 
 ## Arquitectura general
 
-```mermaid
-flowchart LR
-    subgraph PC[Ordenador]
-        UI[Web: botones y visualización]
-        JS[Protocolo JS y reconstrucción de muestras]
-        UI <--> JS
-    end
-    subgraph ESP[ESP32]
-        MAIN[main.cpp: setup y loop]
-        BLE[src/ble: servicio GATT y cola de comandos]
-        MAN[TCS3448Manager: configuración y adquisición]
-        DRV[Adafruit_TCS3448: acceso a registros]
-        MAIN --> BLE
-        BLE <--> MAN
-        MAN <--> DRV
-    end
-    SENSOR[TCS3448]
-    JS <-->|BLE: comandos, estado, configuración y muestras| BLE
-    DRV <-->|I2C| SENSOR
+```text
+Web Browser (interfaz y protocolo de aplicación)
+    | Web Bluetooth
+    v
+src/ble/ — TCS3448BLE (GATT, cola, comandos y ACK)
+    |
+    v
+TCS3448Manager (validación, configuración verificada y adquisición)
+    |
+    v
+Adafruit_TCS3448 (driver y lectura/escritura de registros)
+    | I2C
+    v
+TCS3448
 ```
 
-`main.cpp` inicializa Serial, el gestor del sensor y BLE. Su bucle llama a
-`AtlantesBLE::Update()`, atiende la entrada serie reservada y cede tiempo con
-`delay(1)`. BLE coordina la aplicación, pero delega el acceso al sensor en
-`TCS3448Manager`. Los callbacks Bluetooth encolan órdenes; las operaciones I2C y
-de adquisición se ejecutan desde el bucle Arduino.
+```mermaid
+flowchart LR
+    WEB[Web: requested / active config y canales] <-->|BLE| BLE[src/ble]
+    MAIN[main.cpp: setup y loop] --> BLE
+    BLE <--> MAN[TCS3448Manager]
+    MAN --> MATH[Validación y cálculo de integración]
+    MAN <-->|API del driver| DRIVER[Adafruit_TCS3448]
+    DRIVER <-->|I2C| SENSOR[TCS3448]
+```
 
-## Responsabilidades y documentación de módulos
+La Web usa tiempo en ms, mA, modos de 6/12/18 resultados y opciones de autozero.
+No maneja registros, ATIME/ASTEP, direcciones I2C ni enums de Adafruit. BLE solo
+interactúa con el gestor. Los callbacks BLE encolan mensajes; el bucle Arduino
+valida, accede al hardware y publica respuestas. `main.cpp` sigue siendo pequeño.
 
-| Ruta | Responsabilidad | Documentación |
+La interfaz se organiza en Measurement y Setup dentro del mismo documento, con
+navegación `#/measurement` y `#/setup` para conservar BLE. La presentación dark,
+los estados, el resumen físico de canales y Advanced Debug se describen en
+[ARCHITECTURE.md](ARCHITECTURE.md) y el [README Web](web/README.md).
+
+## Responsabilidades y estructura
+
+| Ruta | Responsabilidad | Detalles |
 | --- | --- | --- |
-| `src/main.cpp` | Arranque y ejecución periódica | [src](src/README.md) |
-| `src/TCS3448Manager/` | Configuración, estado, LED y adquisición | [README](src/TCS3448Manager/README.md) |
-| `src/ble/` | Servicio ATLANTES, comandos, sesiones y transmisión | [README y protocolo](src/ble/README.md) |
+| `src/main.cpp` | Inicialización y ejecución periódica | [src](src/README.md) |
+| `src/TCS3448Manager/` | Configuración, LED, adquisición y validación temporal | [README](src/TCS3448Manager/README.md) |
+| `src/ble/` | Servicio GATT, sesiones, comandos, ACK y envío | [README](src/ble/README.md) |
 | `src/SerialCommand/` | Entrada serie reservada, sin comandos activos | [README](src/SerialCommand/README.md) |
-| `lib/Adafruit_TCS3448/` | Driver TCS3448 sobre Adafruit AS7343 | [README](lib/Adafruit_TCS3448/README.md) |
-| `web/` | Cliente de navegador | [README](web/README.md) |
-| `web/src/` | Fuentes editables de la Web y decodificador | [README](web/src/README.md) |
-| `web/dist/` | HTML autocontenido para uso local/publicación | [README](web/dist/README.md) |
-| `scripts/` | Generación del HTML a partir de las fuentes | [README](scripts/README.md) |
+| `lib/Adafruit_TCS3448/` | Driver con lectura verificada de configuración | [README](lib/Adafruit_TCS3448/README.md) |
+| `web/src/` | Fuentes editables de interfaz y protocolo | [README](web/src/README.md) |
+| `web/dist/` | HTML local autocontenido | [README](web/dist/README.md) |
+| `scripts/` | Generación del HTML y comprobaciones simuladas | [README](scripts/README.md) |
+| `docs/` | Formatos del protocolo y aceptación en hardware | [Guía BLE/setup](docs/HITO_3_BLE.md) |
 
-`include/` queda reservado para cabeceras compartidas. `test/` conserva una
-plantilla de PlatformIO: los tests JS anteriores se han eliminado y actualmente
-no hay una batería automática en esa carpeta. `Hitos/` contiene la planificación;
-no interviene en la ejecución. No existen todavía módulos de análisis,
-almacenamiento o calibración.
+`include/` está reservado para cabeceras. `test/` contiene las comprobaciones de
+regresión anteriores, adaptadas al setup ([README](test/README.md)). Las nuevas
+comprobaciones del hito están en `scripts/verify-setup.mjs`.
+`Hitos/` contiene planificación. No existen todavía módulos de análisis,
+calibración o almacenamiento; los futuros módulos deben incluir README y seguir
+la [plantilla](docs/MODULE_README_TEMPLATE.md).
 
-## Flujo de comandos y datos
+## Modelos y fuente de verdad
+
+`TCS3448Types.h` define tipos propios sin incluir el driver:
+
+| Modelo | Campos principales |
+| --- | --- |
+| `TCS3448Config` | gain, integrationMs, ledCurrent uint16, ledEnabled, smux, autozero, sampleIntervalMs; pines/frecuencia I2C solo de arranque |
+| `TCS3448Sample` | sequence, timestampMs, 18 posiciones ADC uint16, gain, saturated y channelCount válido |
+| `TCS3448Status` | ready, acquiring, error, sampleCount y configRevision |
+
+La configuración activa pertenece al gestor. Se considera conocida (`ready=1`)
+solo tras escribir y verificar todos los campos hardware. La revisión aumenta
+cuando se confirma una aplicación o se modifica el LED por seguridad. Una
+configuración con `ready=0` no debe presentarse como aplicada.
+
+Los códigos de gain son de la aplicación: 0..12 representan 0,5x, 1x, 2x, 4x,
+8x, 16x, 32x, 64x, 128x, 256x, 512x, 1024x y 2048x. SMUX usa 6, 12 o 18;
+autozero usa Disabled 0, FirstMeasurement 1 y EveryMeasurement 2. El mapping a
+registros se realiza en firmware.
+
+## Configuración y validación
+
+| Parámetro | Arranque | Validación definitiva |
+| --- | --- | --- |
+| Gain | 64x | Uno de los 13 códigos definidos |
+| Integration Time | 50,04 ms por ciclo | Finito, rango físico y cuantización válida |
+| LED Current | 10 mA | 4..258 mA, pares |
+| LED | OFF | Booleano explícito |
+| Auto-SMUX | 18 resultados | 6 / 12 / 18 |
+| Autozero | Before first measurement cycle | Solo los tres modos soportados |
+| Sample Period | 500 ms | Entero 1..2147483647 y al menos el mínimo calculado |
+| SDA / SCL / I2C | 4 / 5 / 400 kHz | Se configuran al arrancar; no editables desde Web |
+
+El gestor busca una combinación válida de ATIME/ASTEP para el tiempo solicitado.
+Devuelve el tiempo real cuantizado, verificado contra los registros. El protocolo
+lo redondea a microsegundos. El ADC full scale se obtiene del producto de pasos
+realmente aplicado y se limita a 65535 counts; es de solo lectura.
+
+Sample Period pertenece al planificador de adquisición, no es un registro WTIME.
+El mínimo de la aplicación incluye todos los ciclos SMUX, presupuesto de autozero
+(20 ms por ciclo relevante) y 10 ms para I2C/planificación. Es un presupuesto
+conservador basado en el tiempo típico, no una garantía de tiempo real. El timeout
+vigila una adquisición que tarde más. Un periodo insuficiente se rechaza con
+`SAMPLE_PERIOD_TOO_SHORT`, en vez de ajustarlo silenciosamente.
+
+Autozero FirstMeasurement significa antes del primer ciclo al iniciar el motor;
+EveryMeasurement significa cada ciclo de integración, incluidos los subciclos SMUX.
+El flujo usa medidas individuales con inicio/parada: First puede ejecutarse de
+nuevo al iniciar la siguiente adquisición. No equivale a «una sola vez por arranque».
+
+## Flujo completo de configuración
 
 ```mermaid
 sequenceDiagram
     participant W as Web
-    participant B as BLE ESP32
+    participant B as BLE
     participant M as TCS3448Manager
-    participant S as Sensor I2C
-    W->>B: Connect y suscripción a estado/muestras
-    B->>M: Asegurar adquisición detenida
-    W->>B: GET_STATUS / GET_CONFIG
-    B-->>W: Confirmación en estado y configuración legible
-    W->>B: START
-    B->>M: StartAcquisition()
-    M->>S: Preparar medida y encender LED
-    B-->>W: Confirmación de START
-    loop Mientras haya conexión y adquisición activa
-        B->>M: Update(sample)
-        M->>S: Iniciar medida o consultar dato disponible
-        S-->>M: Frame de canales, ganancia y saturación
-        M-->>B: Nueva TCS3448Sample
-        B-->>W: 4 fragmentos de 20 bytes
-        W->>W: Reconstruir, validar y mostrar
+    participant D as Driver / sensor
+    W->>B: GET_CONFIG tras conectar
+    B->>M: RefreshConfig()
+    M->>D: Lectura comprobada de registros
+    B-->>W: Estado + CONFIG verificada
+    W->>W: Rellenar REQUESTED y ACTIVE
+    W->>B: APPLY_CONFIG con todos los campos
+    B->>M: ApplyConfig(candidate)
+    M->>M: Validar TODOS los campos
+    alt Candidato inválido
+        M-->>B: Error, sin escrituras ni cambios de adquisición
+    else Candidato válido
+        M->>D: Pausar medida, escribir y leer configuración
+        alt Escritura y verificación correctas
+            M->>M: Confirmar configuración y reanudar si estaba RUNNING
+        else Fallo hardware
+            M->>D: Restaurar configuración anterior y verificar
+            M->>M: Detener; marcar UNKNOWN si rollback no se confirma
+        end
     end
-    W->>B: STOP o desconexión
-    B->>M: StopAcquisition()
-    M->>S: Detener medida y apagar LED
+    B-->>W: Publicar CONFIG antes de CONFIG_ACK en STATUS
+    W->>B: Leer CONFIG tras confirmar respuesta
+    W->>W: Actualizar ACTIVE; nunca éxito anticipado
 ```
 
-Tras arrancar, la adquisición está detenida y el LED apagado. Si falla la
-inicialización del sensor, BLE sigue disponible para consultar el error.
-Desconectar cancela la adquisición al procesarse el cambio de sesión en `loop()`;
-el ESP32 vuelve a anunciarse después de 200 ms. Reconectar no reinicia la
-adquisición automáticamente: hay que pulsar Start.
+La validación se completa antes de cualquier escritura. Un rechazo conserva
+configuración y adquisición. Si el fallo ocurre durante la escritura, se intenta
+rollback de todos los ajustes. Un rollback verificado conserva la configuración
+anterior, pero deja la adquisición detenida; si no se verifica, `ready=0` y se
+requiere revisar el hardware/reiniciar. No se promete atomicidad eléctrica de
+varias transacciones I2C: se garantiza validación previa y no se confirma un
+candidato parcial.
 
-## Protocolo de comunicación
+La Web mantiene un formulario REQUESTED separado de ACTIVE CONFIGURATION.
+GET_CONFIG verifica la configuración del gestor contra el hardware. APPLY publica
+la configuración activa y luego confirma mediante STATUS. En éxito el formulario
+se actualiza con valores reales; en rechazo conserva los datos solicitados y
+muestra el error. No hay persistencia de cambios tras reiniciar el ESP32.
 
-Nombre anunciado: **ATLANTES-TCS3448**. Versión del protocolo: **1**.
-Servicio: `a71a0001-3448-4c53-8a7e-41544c414e54`.
+## Protocolo BLE
 
-| Característica | UUID | Uso |
+Nombre anunciado: **TCS3448**. Servicio:
+`34480001-7f2a-4f6c-9e31-8dbe0c2f5a70`.
+
+| Característica | Prefijo UUID; mismo sufijo que el servicio | Propiedades |
 | --- | --- | --- |
-| Estado | `a71a0002-3448-4c53-8a7e-41544c414e54` | Read + Notify, 20 bytes |
-| Comandos | `a71a0003-3448-4c53-8a7e-41544c414e54` | Write con respuesta, texto ASCII |
-| Muestras | `a71a0004-3448-4c53-8a7e-41544c414e54` | Notify, fragmentos de 20 bytes |
-| Configuración | `a71a0005-3448-4c53-8a7e-41544c414e54` | Read, 20 bytes |
+| STATUS | `34480002` | Read + Notify, 20 bytes |
+| COMMAND | `34480003` | Write con respuesta |
+| SAMPLE | `34480004` | Notify, cuatro fragmentos de 20 bytes |
+| CONFIG | `34480005` | Read, 20 bytes |
 
-| Comando exacto, sin terminador | Acción |
-| --- | --- |
-| `START` | Habilitar LED y adquisición; repetirlo estando activa no la reinicia |
-| `STOP` | Detener adquisición, apagar LED y cancelar fragmentos pendientes |
-| `GET_STATUS` | Actualizar el estado y confirmar la consulta |
-| `GET_CONFIG` | Actualizar la característica de configuración para su lectura |
+Se conserva el protocolo binario previo, sin añadir JSON ni otra fragmentación.
+STATUS y SAMPLE mantienen versión 1. CONFIG pasa a versión 2 con campos de alto
+nivel; exige usar el firmware y el HTML del hito 4 juntos. Los UUID no cambian.
 
-La respuesta GATT a una escritura no confirma que el sensor haya ejecutado la
-orden. La confirmación de aplicación llega en el estado: último comando,
-resultado y contador de respuestas. La Web envía una orden cada vez, consulta
-el estado hasta confirmar su ejecución y espera como máximo 3,5 s. Después de
-GET_CONFIG lee la característica de configuración.
+START, STOP, GET_STATUS y GET_CONFIG siguen siendo texto ASCII exacto, sin CR/LF.
+APPLY_CONFIG es un único paquete binario de 20 bytes etiquetado `0xA4`, con versión
+CONFIG 2 y todos los parámetros. La palabra ASCII APPLY_CONFIG sola no incluye
+los parámetros y se rechaza. Véanse [offsets y códigos](docs/HITO_3_BLE.md#servicio-gatt-v1).
 
-El estado incluye sensor inicializado, adquisición activa, error, total de
-muestras, uptime y periodo solicitado. Se actualiza tras órdenes, cambios de
-sesión, errores de adquisición y cada segundo mientras existe conexión; una
-lectura directa devuelve el último estado publicado.
+La escritura GATT acepta el mensaje, no confirma su ejecución. El ACK de aplicación
+usa último comando, resultado, error y contador de respuestas en STATUS. Para APPLY,
+CONFIG se prepara antes de publicar ese ACK y se lee a continuación. La Web envía
+una orden cada vez y espera hasta 5 s; ante timeout no supone éxito y exige volver
+a consultar la configuración. La cola tiene ocho órdenes y descarta sesiones antiguas.
 
-Los enteros multibyte son **little-endian**. Se codifican campos explícitos, no
-la memoria de los structs C++. La muestra ocupa 48 bytes y viaja en cuatro
-fragmentos, con secuencia e índice para reconstruirla. Véanse los
-[formatos byte a byte](docs/HITO_3_BLE.md#servicio-gatt-v1) y las
-[reglas del transporte](src/ble/README.md).
+## Adquisición, START / STOP y muestras
 
-## Cómo se aplica la configuración
+START activa el planificador, no modifica el ajuste LED. STOP cancela la medida y
+la transmisión pendiente; tampoco cambia el LED. Es posible iluminar estando
+STOPPED o medir con LED OFF. El arranque por defecto deja el LED OFF; habilitarlo
+mediante APPLY si se desea iluminación interna.
 
-La configuración reside en `TCS3448Config`, definido en
-`src/TCS3448Manager/TCS3448Types.h`. `Init()` copia la estructura, prepara I2C,
-inicializa el driver y escribe ganancia, ATIME, ASTEP, modo SMUX de 18 resultados
-y corriente LED. Al terminar deja la medida detenida y el LED apagado.
+`Update(sample)` inicia una medida cuando corresponde y sondea su finalización en
+llamadas posteriores. No espera la integración en un bucle; las transacciones I2C
+sí son síncronas. Lee una instantánea de canales, gain y saturación, detiene esa
+medida e incrementa la secuencia. La próxima medida no se solapa con la anterior.
 
-| Parámetro | Valor por defecto |
-| --- | --- |
-| SDA / SCL | GPIO 4 / GPIO 5 |
-| Frecuencia I2C | 400 000 Hz |
-| Ganancia | 64x |
-| ATIME / ASTEP | 29 / 599 |
-| Corriente LED | 10 mA |
-| Periodo solicitado | 500 ms |
-| Integración calculada por ciclo | 50,04 ms |
+La muestra mantiene 48 bytes, pero `channelCount` indica 6, 12 o 18 resultados
+válidos; el resto se rellena con cero y no se muestra. Los nombres/orden son parte
+del protocolo de aplicación, no registros expuestos a JavaScript. La secuencia y
+el timestamp son uint32; el timestamp corresponde a detectar el resultado, no al
+inicio exacto de exposición. Secuencia y timestamp pueden desbordarse. STOP y
+APPLY no reinician la secuencia.
 
-La fórmula es `(ATIME + 1) × (ASTEP + 1) × 2,78 µs`. Hay tres ciclos SMUX;
-el periodo solicitado no equivale al tiempo de integración ni garantiza una
-cadencia exacta de recepción.
+Las notificaciones se espacian al menos 15 ms. No se reemplaza una transmisión a
+medias por otra: si llega una muestra mientras se envía la anterior, se omite su
+envío. No hay retransmisión ni histórico. La Web descarta muestras incompletas,
+fuera de orden o inconsistentes; solo muestra conjuntos completos y contabiliza
+saltos entre secuencias recibidas. APPLY cancela los fragmentos pendientes para
+no continuar una muestra de la configuración anterior.
 
-Para cambiar valores, modificar los predeterminados o pasar una estructura en
-`setup()` antes de iniciar BLE:
+## Conexión, reconexión y errores
 
-```cpp
-TCS3448Config config;
-config.gain = TCS3448_GAIN_64X;
-config.sampleIntervalMs = 1000;
-TCS3448Manager::Init(config);
-AtlantesBLE::Init();
-```
+Connect descubre el servicio, obtiene características y activa suscripciones.
+Después solicita GET_STATUS y GET_CONFIG: tanto los controles como RUNNING/STOPPED
+proceden del firmware. No se recuperan valores activos de una conexión anterior.
 
-Después hay que compilar y cargar el firmware por USB. Actualmente no hay SET_CONFIG,
-edición desde la Web ni guardado de configuración de usuario en memoria persistente.
-GET_CONFIG serializa la copia del gestor; no relee todos los registros del sensor.
-Si el sensor no se inicializó, muestra valores previstos, no una configuración
-confirmada en hardware.
+La desconexión cancela adquisición y apaga el LED en el siguiente ciclo del bucle.
+Ese apagado actualiza la configuración del gestor; al reconectar se lee LED OFF.
+El anuncio BLE se reactiva después de 200 ms. La Web limpia estado, formulario y
+reconstrucción pendiente; al reconectar vuelve a consultar y no inicia adquisición.
 
-## Cómo se adquieren y envían muestras
-
-`StartAcquisition()` descarta el resultado previo y habilita el LED. `Update()`
-inicia una medida cuando corresponde y, en llamadas posteriores, consulta si está
-disponible. No espera en un bucle a que termine la integración; las transacciones
-I2C sí son síncronas. Al recibir el frame, lee canales, ganancia y saturación,
-detiene esa medida y devuelve una nueva `TCS3448Sample`.
-
-Cada muestra lleva secuencia uint32, timestamp de consulta del resultado en ms
-desde el arranque, 18 valores ADC uint16, ganancia y saturación. No representa
-lux ni valores calibrados. La secuencia aumenta solo con lecturas correctas;
-STOP y reconexión no la reinician. Timestamp y secuencia pueden desbordarse.
-
-BLE solo transmite con un cliente conectado y suscrito. Espacia los fragmentos
-al menos 15 ms y no sustituye una transmisión incompleta por una nueva muestra;
-si sigue ocupada, omite el envío de la nueva. No hay historial ni retransmisión.
-La Web valida y reconstruye muestras completas, muestra los canales y contabiliza
-saltos de secuencia entre muestras recibidas. Descarta fragmentos incoherentes,
-fuera de orden o que superan 2 s desde el inicio de la reconstrucción.
+Los errores de validación son INVALID_GAIN, INVALID_INTEGRATION,
+INVALID_LED_CURRENT, INVALID_SMUX_MODE, INVALID_AUTOZERO,
+INVALID_SAMPLE_PERIOD y SAMPLE_PERIOD_TOO_SHORT. Payload incorrecto devuelve
+INVALID_CONFIG_PAYLOAD; fallo de aplicación o rollback devuelve CONFIG_APPLY_FAILED.
+Los fallos de adquisición I2C/timeout intentan apagar LED y detener el sensor.
+Los logs Serial explican recepción, validación, aplicación y ACK, sin imprimir cada loop.
 
 ## Arrancar y probar
 
-1. Conectar el sensor a los pines I2C configurados y comprobar alimentación y
-   niveles eléctricos adecuados para la placa utilizada.
-2. Abrir el proyecto con PlatformIO y seleccionar el entorno `esp32dev`.
-3. Compilar y cargar por USB desde PlatformIO o desde una terminal con `pio`:
+1. Conectar el sensor con alimentación/niveles compatibles y SDA/SCL configurados.
+2. Compilar y cargar por USB desde PlatformIO, entorno `esp32dev`:
 
    ```powershell
    pio run -e esp32dev
@@ -196,40 +242,42 @@ fuera de orden o que superan 2 s desde el inicio de la reconstrucción.
    pio device monitor -b 115200
    ```
 
-4. Abrir `web/dist/index.html` con doble clic en un navegador con Web Bluetooth.
-   El HTML contiene sus scripts y estilos: no necesita servidor ni Node para usarse.
-   El navegador debe permitir Web Bluetooth en el contexto abierto; la página
-   comprueba la disponibilidad y avisa si no puede usarlo.
-5. Pulsar Connect y seleccionar ATLANTES-TCS3448. Comprobar estado detenido y
-   configuración. Pulsar Start, variar la iluminación y comprobar los canales.
-6. Pulsar Stop: el LED debe apagarse y el contador de adquisición dejar de crecer.
-   Volver a iniciar y comprobar que la secuencia continúa.
-7. Desconectar durante adquisición, reconectar y comprobar que sigue detenida.
-   Probar también arranque sin sensor y una adquisición prolongada.
+3. Abrir `web/dist/index.html` con doble clic en un navegador que permita Web
+   Bluetooth en archivos locales, con Bluetooth activo. El HTML no necesita
+   servidor, Node ni Internet para utilizarse.
+4. Connect → TCS3448 desde Measurement. Comprobar IDLE (STOPPED del firmware).
+5. Ir a Setup: revisar ACTIVE y seleccionar gain, integración en ms, corriente/estado
+   LED, SMUX, autozero y periodo. APPLY CONFIGURATION y esperar CONFIGURATION VALID.
+6. Volver a Measurement, Start y navegar a Setup durante RUNNING. Cambiar ajustes
+   con APPLY y volver al readout sin desconectar. Comprobar los cambios en los ADC.
+7. Stop y comprobar que cesan muestras; el LED respeta su ajuste independiente.
+   Desconectar/reconectar: debe quedar STOPPED y LED OFF, con el resto de ajustes
+   recuperados del ESP32. Reiniciar el ESP32 restaura valores de arranque.
+8. Seguir la [matriz de aceptación](docs/HITO_3_BLE.md#pasos-de-aceptación-en-hardware)
+   para validaciones, errores, SMUX y continuidad en hardware.
 
-La configuración `huge_app.csv` reserva una única aplicación de **3 MiB** en
-una flash de 4 MiB, sin segunda partición de aplicación para OTA. Los cambios de
-firmware se cargan por USB. El HTML y los README no se almacenan en el ESP32.
+La flash usa `huge_app.csv`: una aplicación de 3 MiB en flash de 4 MiB, sin segunda
+partición OTA. Cargar cambios por USB. La Web y la documentación no ocupan flash.
 
-Para modificar la Web, editar `web/src/` y ejecutar:
+Para editar/verificar la Web, desde la raíz:
 
 ```powershell
-node scripts/build-web.mjs
 node --check web/src/app.mjs
+node --check web/src/ui.mjs
 node --check web/src/protocol.mjs
+node scripts/build-web.mjs
+node scripts/verify-setup.mjs
+node test/web_protocol.test.mjs
+node test/web_app.test.mjs
 ```
 
-El archivo generado puede copiarse a otro equipo o publicarse en GitHub Pages.
-No editar `web/dist/index.html` a mano: la siguiente generación sobrescribe sus
-cambios. La compilación y las comprobaciones de sintaxis no sustituyen la prueba
-física de sensor, radio y navegador. La [guía del hito 3](docs/HITO_3_BLE.md)
-incluye el protocolo completo y la lista de aceptación en hardware.
+Editar `web/src/`, no `web/dist/index.html`: este último se regenera y se puede
+copiar solo o publicar después en GitHub Pages. El verificador ejecuta el script
+del HTML con GATT simulado; no verifica el driver, la radio ni el sensor físico.
+Una compilación y pruebas simuladas correctas no cierran la aceptación en hardware.
 
-## Documentación de futuros módulos
+## Mantenimiento
 
-Cada nuevo módulo de análisis, almacenamiento, calibración u otra función debe
-incluir su propio `README.md` y añadirse a la tabla de arquitectura de este archivo.
-Usar la [plantilla de módulo](docs/MODULE_README_TEMPLATE.md): propósito, archivos,
-API, entradas/salidas, configuración, flujo, errores, dependencias y pruebas.
-Documentar lo implementado y separar expresamente lo previsto. Un cambio de
-protocolo debe actualizar tanto firmware como Web y la descripción de sus campos.
+Actualizar este README y los README internos en el mismo cambio que las API.
+Mantener los formatos binarios en la guía BLE como referencia detallada, sin
+crear otro documento global paralelo. Cada futuro módulo debe incluir su README.

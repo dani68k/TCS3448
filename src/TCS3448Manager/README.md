@@ -1,89 +1,122 @@
 # TCS3448Manager
 
-[Aplicación](../../README_APP.md) · [BLE](../ble/README.md) ·
-[Driver](../../lib/Adafruit_TCS3448/README.md).
+[Aplicación](../../README_APP.md) · [BLE](../ble/README.md) · [Driver](../../lib/Adafruit_TCS3448/README.md).
 
-Gestiona el sensor, su configuración, el LED, el estado de adquisición y la
-construcción de muestras. No conoce GATT, UUID ni elementos de la página Web.
+Fuente principal de verdad del sensor: valida y aplica configuración de alto
+nivel, verifica registros, coordina medidas y crea muestras. No conoce UUID,
+características GATT ni controles HTML.
 
-## Archivos y API
+## Archivos y tipos
 
 | Archivo | Contenido |
 | --- | --- |
-| `TCS3448Types.h` | `TCS3448Config`, `TCS3448Readings`, `TCS3448Sample`, errores y estado |
-| `TCS3448Manager.h` | Interfaz del namespace `TCS3448Manager` |
-| `TCS3448Manager.cpp` | Instancia privada del driver y lógica de adquisición |
+| `TCS3448Types.h` | Config, Sample, Status y enums propios de gain/SMUX/autozero/error; sin Adafruit |
+| `TCS3448ConfigMath.h/.cpp` | Validación pura y conversión de integración a ajustes físicos |
+| `TCS3448Manager.h/.cpp` | Driver privado, configuración confirmada y estado de adquisición |
 
-| Función | Responsabilidad |
+Config usa gain propio 0..12, integración double en ms, corriente uint16 (incluye
+258 mA), LED bool, SMUX 6/12/18, autozero propio 0/1/2 y periodo uint32. Pines y
+frecuencia I2C son de arranque y no se admiten cambios remotos.
+
+Sample tiene array máximo de 18 uint16, `channelCount`, gain, saturación,
+secuencia y timestamp. Status contiene ready, acquiring, error, contador de
+muestras y revisión de configuración. Los structs no se transmiten directamente.
+
+## API pública
+
+| Función | Uso |
 | --- | --- |
-| `Init(config)` | Copiar/aplicar configuración, inicializar I2C y dejar sensor detenido |
-| `GetConfig()` / `GetStatus()` | Consultar referencias de solo lectura al estado del gestor |
-| `StartAcquisition()` | Preparar una adquisición nueva; no reiniciar si ya está activa |
-| `StopAcquisition()` | Cancelar medida pendiente, detener sensor y apagar LED |
-| `Update(sample)` | Sondear la adquisición; devolver true solo con una muestra nueva |
-| `LEDEnable()` | Aplicar corriente configurada y habilitar el LED |
-| `GetIntegrationTime()` / `GetGain()` | Consultas al driver conservadas para diagnóstico |
-| `ReadAllChannels()` / `PrintHeader()` / `PrintReadings()` | Lectura e impresión heredadas; no usadas por el flujo BLE |
+| `Init(config)` | Validar, inicializar hardware, escribir y verificar configuración |
+| `GetConfig()` / `GetStatus()` | Consultar instantáneas del gestor |
+| `RefreshConfig()` | Leer cada ajuste hardware y confirmar que coincide con la configuración activa |
+| `ApplyConfig(config)` | Validar candidato completo, pausar, aplicar, verificar y confirmar o restaurar |
+| `GetADCFullScale()` / `GetMinimumPeriodMs()` | Magnitudes derivadas por firmware |
+| `StartAcquisition()` | Iniciar planificador; no altera LED ni reinicia una adquisición activa |
+| `StopAcquisition(turnOffLED=false)` | Cancelar medida; apagado adicional para desconexión/fallo |
+| `Update(sample)` | Devolver true solo cuando existe una muestra nueva completa |
+| `ErrorName(error)` | Nombre de error para trazas |
 
-`ReadAllChannels()` emplea la lectura bloqueante del driver heredado. Para mantener
-la respuesta a comandos BLE, el flujo actual utiliza `Update(sample)`. No mezclar
-ambos caminos durante una adquisición.
+Se conservan LEDEnable, GetGain, GetIntegrationTime, ReadAllChannels, PrintHeader
+y PrintReadings para diagnóstico. LEDEnable usa ApplyConfig. ReadAllChannels es
+bloqueante, se rechaza durante adquisición y no se usa en el flujo BLE.
 
-## Configuración
+## Conversión, límites y periodo
 
-Valores predeterminados: SDA 4, SCL 5, 400 kHz, 64x, ATIME 29, ASTEP 599,
-LED 10 mA y periodo 500 ms. `sampleIntervalMs` debe ser distinto de cero.
-El modo SMUX se fija en 18 resultados. La integración por ciclo es:
+El cálculo de integración busca entre 256 multiplicadores y pasos 1..65535 la
+combinación más próxima al tiempo pedido. No permite ATIME=ASTEP=0 ni ASTEP=65535.
+El rango físico es 0,00556 ms .. 46639,9488 ms, con tolerancia de 0,0005 ms en el
+extremo superior para el redondeo del protocolo a microsegundos.
 
 ```text
-(ATIME + 1) × (ASTEP + 1) × 2,78 µs
+integration_ms = (ATIME + 1) × (ASTEP + 1) × 0,00278
+adc_full_scale = min((ATIME + 1) × (ASTEP + 1), 65535)
 ```
 
-`Init()` copia la configuración antes de intentar aplicarla. `GetConfig()` devuelve
-esa copia incluso si hubo un fallo; comprobar `GetStatus().ready` antes de afirmar
-que la configuración se aplicó. No hay setter durante adquisición ni persistencia
-de configuración de usuario. Los cambios se incorporan al firmware y se cargan por USB.
+La fórmula y restricciones proceden de la [ficha TCS3448, sección 10.2.2](https://look.ams-osram.com/m/1c24b057e65ee61e/original/TCS3448-14-Channel-multi-spectral-sensor.pdf).
 
-## Flujo de adquisición
+Gain solo admite códigos 0..12. Corriente: 4..258 mA pares, sin truncar ni ajustar
+silenciosamente valores inválidos. SMUX admite 6, 12 o 18. Autozero se convierte a
+0 (Disabled), 255 (FirstMeasurement) o 1 (EveryMeasurement) del registro del sensor.
+First se refiere al primer ciclo tras habilitar el motor; al hacer medidas
+individuales puede ejecutarse de nuevo en cada adquisición. Every se aplica a
+cada subciclo, no solo a cada muestra compuesta.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Detenido: Init correcto
-    Detenido --> EsperandoPeriodo: START / habilitar LED
-    EsperandoPeriodo --> Midiendo: iniciar medida
-    Midiendo --> EsperandoPeriodo: dato disponible / leer frame y devolver muestra
-    EsperandoPeriodo --> Detenido: STOP o desconexión
-    Midiendo --> Detenido: STOP o desconexión
-    Midiendo --> Error: fallo I2C o timeout
-    EsperandoPeriodo --> Error: fallo al iniciar medida
-    Error --> EsperandoPeriodo: START si inicializado y preparación correcta
+Sample Period es del planificador, no WTIME. Se exige un entero 1..2147483647 y:
+
+```text
+cycles = channels / 6
+zero_cycles = 0 (Disabled), 1 (First), cycles (Every)
+minimum_period_ms = ceil(integration_real_ms × cycles + 20 × zero_cycles + 10)
 ```
 
-La primera medida puede iniciarse inmediatamente tras START. Las siguientes se
-programan desde el inicio de la anterior, sin solapar medidas. Si la integración
-consume más que el periodo solicitado, no se fuerza una cadencia imposible.
+Los 20 ms reservan margen sobre los 15 ms típicos de autozero; no son un máximo
+hardware garantizado. Se añaden 10 ms de I2C/planificación. Por defecto el mínimo
+resulta 181 ms. Un valor menor se rechaza con SAMPLE_PERIOD_TOO_SHORT.
+El timeout de adquisición es minimum_period_ms + 1000 ms.
 
-La consulta de dato disponible y la lectura son transacciones I2C síncronas, pero
-no hay espera activa de la integración. El timeout se calcula como tres tiempos
-de integración más 1000 ms. Una lectura correcta incrementa `sampleCount` y copia
-18 canales, ganancia y saturación del mismo frame a `TCS3448Sample`.
+## Aplicación y rollback
 
-La secuencia y el timestamp son uint32; el timestamp corresponde a la consulta
-que detecta el resultado, no al instante exacto de inicio de exposición. Los ADC
-son valores crudos uint16. No se calibra, normaliza ni analiza el espectro aquí.
+1. Validar todo el candidato antes de escrituras o cambios de adquisición.
+2. Verificar la configuración anterior mediante lectura comprobada.
+3. Guardar ajustes previos, pausar y cancelar la medida en curso.
+4. Escribir todos los ajustes, con LED habilitado al final, y releerlos.
+5. Si coinciden, confirmar tiempo cuantizado, ADC full scale y revisión; reanudar
+   el planificador si estaba activo.
+6. Ante fallo, detener y reescribir los ajustes anteriores. Verificarlos antes de
+   mantener ready. La adquisición queda detenida incluso si el rollback fue correcto.
+7. Si el rollback no se confirma, ready=false, intentar apagar LED y requerir
+   revisión/reinicio. El candidato parcial nunca se publica como activo.
 
-## Errores y ejecución
+No es una transacción eléctrica indivisible: hay varias operaciones I2C. La
+atomicidad de validación y la verificación/recuperación evitan confirmar mezclas.
+No hay persistencia ni reintento de Init desde BLE. RefreshConfig no adivina una
+configuración distinta: si no coincide con lo confirmado, invalida el estado.
 
-Errores: None 0, Initialization 1, Configuration 2, Led 3, Communication 4,
-Timeout 5. Un fallo de adquisición intenta detener medida y LED, desactiva la
-adquisición y conserva el error. `ready` representa la inicialización, no la
-ausencia de errores posteriores. STOP no borra un error anterior; un START
-correcto lo limpia. Si falló Init, hay que corregir la causa y reiniciar.
+## Adquisición y canales
 
-Todas las llamadas operativas se realizan desde el bucle Arduino; el módulo no
-ofrece sincronización para acceso I2C concurrente desde callbacks o varias tareas.
-Depende de Arduino, Wire y `Adafruit_TCS3448`.
+START respeta LED configurado. STOP normal conserva LED; desconexión/fallo pide
+apagado y actualiza la copia activa y su revisión cuando se verifica. Por defecto
+LED está apagado incluso al hacer START hasta que el usuario lo habilita con APPLY.
 
-Validar en hardware START/STOP repetidos, respuesta a iluminación, saturación,
-sensor ausente y desconexión durante medida. Véase la
-[guía de aceptación](../../docs/HITO_3_BLE.md#pasos-de-aceptación-en-hardware).
+Update inicia medidas sin solaparlas y consulta disponibilidad en llamadas
+sucesivas. I2C es síncrono, sin esperar activamente a que termine la integración.
+Lee únicamente 6/12/18 resultados según SMUX. El driver obtiene canales, gain y
+saturación del mismo frame; se ponen a cero las posiciones no válidas.
+
+Orden del protocolo, truncado al número válido:
+FZ, FY, FXL, NIR, VIS_TL_0, VIS_BR_0, F2, F3, F4, F6, VIS_TL_1, VIS_BR_1,
+F1, F7, F8, F5, VIS_TL_2, VIS_BR_2. Los counts son crudos, sin normalizar/calibrar.
+La saturación es una bandera del frame. Secuencia y timestamp uint32 pueden
+desbordarse; timestamp es la consulta que detecta datos, no inicio de exposición.
+
+## Errores, dependencias y pruebas
+
+Todos los accesos al sensor se realizan desde loop, no desde callbacks BLE.
+Depende de Arduino, Wire, el driver local y Adafruit AS7343. Los errores de
+validación 16..23 se describen en [protocolo](../../docs/HITO_3_BLE.md#servicio-gatt-v1).
+Un fallo I2C/timeout intenta apagar y detener; no hay spam de logs en cada loop.
+
+Compilar con `pio run -e esp32dev`. La verificación JS no prueba esta máquina de
+estados ni el I2C real: comprobar periodos límite, readback, cambios RUNNING,
+SMUX, LED 258 mA y rollback/fallos siguiendo la
+[aceptación en hardware](../../docs/HITO_3_BLE.md#pasos-de-aceptación-en-hardware).

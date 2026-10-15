@@ -1,90 +1,99 @@
-# Gestor BLE Web de ATLANTES
+﻿# Gestor BLE Web del TCS3448
 
-Este módulo ocupa `src/ble/`; su namespace es `AtlantesBLE`. No existe una carpeta
-`BLEWebManager/` separada. [Visión general](../../README_APP.md).
+[Aplicación](../../README_APP.md) · [Gestor del sensor](../TCS3448Manager/README.md).
 
-## Responsabilidad y archivos
+El módulo real sigue en `src/ble/`, namespace `TCS3448BLE`. No se ha movido a
+otra carpeta. Expone GATT, encola comandos, coordina el gestor y publica ACK,
+estado, configuración y muestras. No incluye ni llama a Adafruit_TCS3448.
 
-Expone el servicio GATT, recibe comandos, coordina su ejecución con
-`TCS3448Manager` y publica estado, configuración y muestras. Depende de la
-biblioteca BLE incluida en Arduino-ESP32 y de la cola FreeRTOS; no accede
-directamente a registros I2C.
+## Archivos y API
 
-| Archivo | Función |
+| Archivo | Contenido |
 | --- | --- |
-| `ble.h` | API `AtlantesBLE::Init()` y `AtlantesBLE::Update()` |
-| `ble.cpp` | Servicio, callbacks, sesiones, cola y envío periódico |
-| `BLEProtocol.h` | UUID, versión, comandos/resultados y codificación little-endian |
+| `ble.h` | `TCS3448BLE::Init()` y `Update()` |
+| `ble.cpp` | Callbacks, cola, sesiones, ejecución y publicación |
+| `BLEProtocol.h` | Identificadores, códigos estables, encoder y decoder de APPLY |
 
-Llamar Init una vez después de inicializar el sensor y Update de forma frecuente
-desde `loop()`. BLE permanece consultable si el sensor no pudo inicializarse.
+Init se llama una vez después del gestor, incluso si el sensor falló. Update se
+llama frecuentemente desde loop. Depende de Arduino BLE, FreeRTOS y tipos propios
+del gestor. Las tareas Bluetooth no ejecutan operaciones I2C.
 
-## Servicio y órdenes
+## Servicio y mensajes
 
-Nombre anunciado: `ATLANTES-TCS3448`.
-Servicio: `a71a0001-3448-4c53-8a7e-41544c414e54`.
-Las características comparten el sufijo `-3448-4c53-8a7e-41544c414e54`:
+Nombre: `TCS3448`. Servicio: `34480001-7f2a-4f6c-9e31-8dbe0c2f5a70`.
+Características con sufijo `-7f2a-4f6c-9e31-8dbe0c2f5a70`:
 
-| Prefijo UUID | Característica | Propiedades |
+| Prefijo | Característica | Propiedades / formato |
 | --- | --- | --- |
-| `a71a0002` | Estado, 20 bytes | Read + Notify |
-| `a71a0003` | Comandos ASCII | Write con respuesta |
-| `a71a0004` | Fragmentos de muestra, 20 bytes | Notify |
-| `a71a0005` | Configuración, 20 bytes | Read |
+| `34480002` | STATUS | Read + Notify, 20 bytes, versión 1 |
+| `34480003` | COMMAND | Write con respuesta; ASCII o APPLY binario |
+| `34480004` | SAMPLE | Notify, cuatro fragmentos de 20 bytes, versión 1 |
+| `34480005` | CONFIG | Read, 20 bytes, versión 2 |
 
-Comandos exactos, sin CR/LF: START 1, STOP 2, GET_STATUS 3 y GET_CONFIG 4.
-Ninguno es 0 e inválido es 255. Resultados: Ok 0, UnknownCommand 1,
-SensorError 2 y QueueFull 3. GET_CONFIG actualiza la copia serializada de la
-configuración del gestor; no cambia parámetros del sensor.
+START, STOP, GET_STATUS y GET_CONFIG siguen siendo ASCII sin terminador. APPLY_CONFIG
+usa un paquete de 20 bytes etiquetado 0xA4 con parámetros completos. El protocolo
+ya era binario: no se añade JSON ni una nueva fragmentación. Los
+[offsets y códigos](../../docs/HITO_3_BLE.md#servicio-gatt-v1) son la referencia de wire.
+El cliente del hito 3 no interpreta CONFIG v2; actualizar firmware y HTML juntos.
 
-El callback de escritura interpreta el texto y lo encola con su sesión. La cola
-tiene ocho elementos y no bloquea al callback; si se llena, el bucle publica
-QueueFull con comando 255. Update procesa hasta ocho órdenes por llamada.
+## Recepción, ACK y errores
 
-Cada orden procesada incrementa un contador uint16 de respuestas y publica el
-estado. El cliente debe esperar una confirmación antes de enviar la siguiente;
-la respuesta de escritura GATT solo confirma la aceptación de la escritura.
+Los callbacks interpretan el comando y encolan una copia de sus datos con la
+sesión actual. Cola: ocho elementos, sin espera; hasta ocho órdenes procesadas
+por Update. Un cambio de sesión descarta órdenes antiguas. Un exceso de cola
+se comunica con comando 255 y resultado QueueFull 3.
 
-## Estado y transmisión
+GET_CONFIG llama RefreshConfig del gestor: verifica los registros antes de
+publicar la instantánea. Fallo de lectura implica resultado SensorError y CONFIG
+no válida. Para APPLY, BLE copia pines/frecuencia del gestor y entrega únicamente
+los parámetros remotos a ApplyConfig. No contiene cálculos de registros.
 
-Los paquetes de estado y configuración tienen 20 bytes. La muestra reconstruida
-tiene 48 bytes: versión, ganancia, saturación, número de canales, secuencia,
-timestamp y 18 ADC. Los formatos completos y offsets están en el
-[protocolo del hito 3](../../docs/HITO_3_BLE.md#servicio-gatt-v1).
+El ACK lógico de APPLY consta de STATUS y su CONFIG asociada: primero se prepara
+CONFIG con la configuración verificada (o la anterior tras rechazo/rollback), luego
+se incrementa el contador de respuestas y se publica STATUS. El cliente espera
+comando 5 y contador nuevo, comprueba resultado/error y lee CONFIG. La revisión
+permite identificar aplicaciones, pero no es un identificador de petición.
+Solo debe haber una orden de aplicación pendiente por cliente.
 
-Una muestra se divide en cuatro notificaciones de 20 bytes:
+| Resultado | Código | Interpretación |
+| --- | --- | --- |
+| Ok | 0 | Orden ejecutada |
+| UnknownCommand | 1 | Texto desconocido |
+| SensorError | 2 | Falló inicio/parada o lectura de configuración |
+| QueueFull | 3 | Cola llena; no asumir aceptación |
+| InvalidConfig | 4 | Candidato o payload rechazado |
+| ConfigApplyFailed | 5 | Fallo hardware de aplicación/recuperación |
 
-| Bytes | Contenido |
-| --- | --- |
-| 0 | Versión 1 |
-| 1 | Índice 0..3 |
-| 2 | Total de fragmentos: 4 |
-| 3 | Reservado: cero |
-| 4..7 | Secuencia uint32 little-endian |
-| 8..19 | 12 bytes de muestra desde índice × 12 |
+El detalle ocupa el byte de error en STATUS: errores de sensor 1..6 o validaciones
+16..23. Los rechazos no alteran el estado del gestor; el error de la última orden
+se conserva en BLE hasta otra orden. Un error nuevo de adquisición lo sustituye.
+No enviar ASCII APPLY_CONFIG solo: se reconoce, pero devuelve INVALID_CONFIG_PAYLOAD.
 
-Se transmite un fragmento cada al menos 15 ms, solo con conexión y suscripción
-activa. Si una muestra llega mientras aún se transmite otra, la nueva no se envía.
-No hay cola de histórico ni retransmisión. El contador de adquisición puede ser
-mayor que el número de muestras recibidas por el navegador.
+## Adquisición y sesiones
 
-El estado se publica tras órdenes y cambios de sesión, ante cambios de error de
-adquisición y al menos cada segundo durante conexión. Read devuelve la última
-instantánea publicada; GET_STATUS fuerza su actualización.
+START inicia el planificador sin forzar LED. STOP cancela medida y fragmentos,
+conservando el estado LED configurado. APPLY cancela la transmisión pendiente;
+el gestor pausa/reanuda la adquisición solo tras aplicación correcta.
 
-## Conexión, tareas y errores
+Cada muestra mantiene 48 bytes, con channelCount 6/12/18 y posiciones no válidas a
+cero. Se divide con el framing existente: versión, índice 0..3, total 4, reservado,
+secuencia uint32 y 12 bytes de datos. Se espacia al menos 15 ms entre fragmentos.
+No se transmite sin suscripción; si aún hay un frame pendiente, la muestra nueva
+se omite. No hay histórico ni retransmisión.
 
-Los callbacks actualizan conexión/sesión o encolan comandos. Update detecta
-cambios de sesión, detiene adquisición, cancela fragmentos pendientes y descarta
-comandos antiguos. Tras desconexión reinicia el anuncio después de 200 ms.
-Las suscripciones se deshabilitan al desconectar; el navegador debe renovarlas
-al reconectar. No se reanuda adquisición automáticamente.
+Al cambiar sesión se pide StopAcquisition(true), se apaga LED y se actualiza CONFIG.
+Desconectar reactiva anuncio tras 200 ms y borra suscripciones; reconectar requiere
+volver a suscribirse, consultar configuración y pulsar Start. CONFIG del gestor
+es la única fuente de verdad, no una copia editable independiente en BLE.
 
-El bucle realiza la adquisición y serialización. Las operaciones del sensor no
-se ejecutan en la tarea Bluetooth. Los errores del sensor se comunican en estado
-y como SensorError cuando falla una orden de inicio/parada.
+El estado se publica tras órdenes, sesiones y errores, y cada segundo conectado.
+Read devuelve la última instantánea; GET_STATUS fuerza actualización. Serial
+registra recepción de APPLY y CONFIG_ACK con el nombre del error, sin logs por loop.
 
-Para cambiar el protocolo, actualizar `BLEProtocol.h`, los serializadores de
-`ble.cpp`, `web/src/protocol.mjs` y la documentación de offsets, y regenerar el
-HTML. Validar reconexiones, START/STOP, cola y muestras incompletas siguiendo la
-[guía de prueba](../../docs/HITO_3_BLE.md#pasos-de-aceptación-en-hardware).
+## Verificación
+
+Compilar `pio run -e esp32dev`; generar HTML y ejecutar
+`node scripts/verify-setup.mjs` para comprobar protocolo y aplicación simulada.
+La simulación no ejecuta esta cola ni los callbacks reales; completar la
+[prueba en hardware](../../docs/HITO_3_BLE.md#pasos-de-aceptación-en-hardware),
+incluyendo cambio de parámetros durante RUNNING y desconexión durante APPLY.

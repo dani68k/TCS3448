@@ -1,11 +1,11 @@
-Proyecto: ATLANTES
+Proyecto: TCS3448
 Entorno: ESP32 + PlatformIO + Arduino framework + VSCode
 Sensor: ams OSRAM TCS3448
 Librería actual: Adafruit_TCS3448, basada en la arquitectura de Adafruit_AS7343
 
 Contexto general
 ---------------
-Este proyecto forma parte de ATLANTES y tiene como objetivo desarrollar una plataforma experimental para caracterización óptica, colorimetría y volumetría usando el sensor multiespectral TCS3448.
+Este proyecto tiene como objetivo desarrollar una plataforma experimental para caracterización óptica, colorimetría y volumetría usando el sensor multiespectral TCS3448.
 
 El sensor ya está funcionando correctamente en el ESP32 y actualmente ya puedo:
 - inicializar el TCS3448
@@ -131,7 +131,7 @@ Además, si la librería o el modo de lectura actual devuelve VIS/CLEAR:
 - vis1
 - vis2
 
-Si existe información Flicker en la adquisición normal y tiene sentido almacenarla, puede añadirse, pero NO es prioritaria para ATLANTES en esta fase.
+Si existe información Flicker en la adquisición normal y tiene sentido almacenarla, puede añadirse, pero NO es prioritaria para TCS3448 en esta fase.
 
 También quiero almacenar metadatos de adquisición:
 
@@ -538,5 +538,5 @@ Por tanto, priorizar:
 - detección de errores
 - separación clara entre hardware y análisis
 
-Este es el HITO 2 del proyecto ATLANTES.
+Este es el HITO 2 del proyecto TCS3448.
 Implementarlo sin ampliar todavía el alcance a los siguientes hitos.

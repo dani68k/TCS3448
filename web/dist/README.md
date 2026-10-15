@@ -1,18 +1,19 @@
-# Web lista para usar
+﻿# Interfaz local lista para utilizar
 
-[Cliente Web](../README.md).
+[Cliente Web](../README.md) · [Decisión de navegación](../../ARCHITECTURE.md).
 
-`index.html` es el resultado generado y autocontenido. Se puede abrir con doble
-clic, copiar a otro directorio o publicar en un alojamiento HTTPS como GitHub Pages.
-Para distribuir la aplicación solo se necesita ese HTML; este README no es una
-dependencia de ejecución.
+Abrir `index.html` con doble clic. Incluye estilos y scripts, sin archivos
+auxiliares ni servidor. Solo este HTML se necesita para distribuir o publicar.
+Debe utilizarse un navegador que permita Web Bluetooth en el contexto abierto.
 
-Incluye CSS y JavaScript clásico; no hace importaciones de módulos ni carga
-recursos auxiliares. Requiere un navegador que permita Web Bluetooth en el contexto
-abierto, Bluetooth activo y el firmware ATLANTES cargado en el ESP32.
+La navegación interna tiene dos vistas:
 
-No editarlo manualmente. Editar `web/src/` y ejecutar desde la raíz:
+- Measurement: `index.html#/measurement`.
+- Setup: `index.html#/setup`.
 
-```powershell
-node scripts/build-web.mjs
-```
+No abrir otro HTML para cambiar de vista: este documento conserva la misma sesión
+BLE al navegar. Recargar, cerrar o abrir otra copia crea una sesión distinta.
+
+No editarlo a mano: modificar `web/src/` y ejecutar desde la raíz
+`node scripts/build-web.mjs`. La siguiente generación sobrescribe la salida.
+El resultado no contiene datos de demostración ni simuladores: conecta al ESP32.

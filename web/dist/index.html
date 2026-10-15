@@ -1,82 +1,297 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ATLANTES · TCS3448 BLE</title>
+  <meta name="color-scheme" content="dark">
+  <title>TCS3448 | Measurement</title>
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACyklEQVR4AexUSUwUURB91d0zQVSigHpE0XjABeQkKsYl3FzuJjBKYjR60iseOHLygHrAizBuEdG4RYN6M+4SlwRXFvWgJgiiQhCmu8vX3c4kjMyQDCFc5qeq61X9qvqvqxcDM7yyBLITyE4gO4EpTEAFLbFLaLEvA8QZ/tAyJ9Bsr4MYayAoI4n1yHBlTkCwgXd+lwTuwDSIM2MwBQJSAnU7Of1OOM6KzI4HMiegWMrybrjaDZHi6SMQ/TYbrRr+7wDBYqjZC4sqsgTJy6vxapPjSX76CUSVjQt7MWq/QNOX3ETtKc2BYBGG8Qk/8ZnxBTiqs2gD8fAf+zlQ+BFnNe100hMQex8EF9l1ADkLt9MG4o4WQTGAgzLkK9CP+WNFwSav+Q5zZRBwL8C29zOSUtITUNnMypuA4b3tlcSBWFYxCfQEDq+CXoTCnBaxJwLmCmuMWzCwCWlWagKtHKlgNUzzMVQ72Kg80ceUZTCkK+EruqCx5QlftBxidMA1H0FlFZo0N7GXBFITGLMrWdyFXfIdYj4jLoX37L0Gqivhum886KvKa8As8XGQU0b8FBHph+gH5Nob6U8oqQmo7IW4bX5VtXzl83wLw9kJVWFsC0LWfdp/4j5gfCtVYDk7GHwHv4ZIjTZ4vQgnkoBAi1bgjFOH5tgRRGlP2+egKMfv4cZEkUo9X8hjzLsCyBDe4x7iq8ci1l/cu8G64xDmxvcco5GxUkTt84jG6qjBGc0x//cdEHBG8zjSAhhGPu+0AK68gm2uxYF5P+J9UGNd5x1yAnIbplGFenERXx7WkSrWXoW621BtXYtvYY8MwhmpgOpLxtgbBb41MIcWAYHanHbUhA6jxqTSRswG1EqflzBOI6GHzDkB770Yt0EnkteP6vBJRMJP6I2X2rl9iIQa/DN2hw6xh3dOu5cUEPDQDGmWQHYC2QlM+wQm+7r/AgAA///amq39AAAABklEQVQDAKdk8EE8Z7mVAAAAAElFTkSuQmCC">
   <style>
+:root {
+  color-scheme: dark;
+  --bg-main: #0b1520;
+  --bg-header: #08131d;
+  --bg-panel: #142333;
+  --bg-panel-alt: #10202e;
+  --bg-input: #0e1b28;
+  --border: #2a4052;
+  --border-soft: #203548;
+  --text-primary: #f3f7fa;
+  --text-secondary: #a9bccb;
+  --text-muted: #8ba0b1;
+  --accent: #1597e5;
+  --accent-hover: #28a9f5;
+  --accent-cyan: #64c9ed;
+  --success: #56d890;
+  --warning: #e1b95a;
+  --danger: #ed8585;
+  --radius: 12px;
+}
 * { box-sizing: border-box; }
-body { margin: 0; background: #eff3f5; color: #18313b; font: 16px/1.5 system-ui, sans-serif; }
-main { max-width: 1060px; margin: 40px auto; padding: 0 20px; }
-header { margin-bottom: 28px; }
-h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); margin: 4px 0; letter-spacing: -.03em; }
-h2 { font-size: 1.1rem; margin: 0 0 16px; }
-p { margin: 10px 0; }
-.eyebrow { font-size: .75rem; font-weight: 700; letter-spacing: .15em; color: #367285; }
-section { background: white; border: 1px solid #d6e0e4; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
-.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.actions { display: flex; flex-wrap: wrap; gap: 10px; }
-button { background: #14576b; color: white; border: 1px solid #14576b; border-radius: 6px; padding: 10px 18px; font: inherit; cursor: pointer; }
-button:disabled { opacity: .4; cursor: default; }
-button:focus-visible { outline: 3px solid #d89e31; outline-offset: 3px; }
-#disconnect, #stop, #refresh { background: white; color: #14576b; }
-pre { font: .9rem/1.7 ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 0; }
-.hint, small { color: #536b75; font-size: .85rem; }
-small { display: block; font-weight: normal; }
-#message { color: #a12525; min-height: 24px; }
-@media (max-width: 720px) { .columns { grid-template-columns: 1fr; gap: 0; } main { margin-top: 24px; } }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg-main); color: var(--text-primary); font: 14px/1.5 "Segoe UI", Inter, Roboto, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+a { color: var(--accent-cyan); text-underline-offset: 4px; }
+button, input, select { font: inherit; }
+button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 4px; }
+h1, h2, p, dl, dd { margin: 0; }
+h1 { font-size: clamp(24px, 3vw, 30px); line-height: 1.25; font-weight: 600; letter-spacing: -.03em; }
+h2 { font-size: 18px; font-weight: 600; letter-spacing: -.015em; }
+.sr-only, .skip-link:not(:focus) { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip-link:focus { display: block; padding: 12px; background: var(--bg-panel); }
+.instrument-header { background: var(--bg-header); border-bottom: 1px solid var(--border-soft); }
+.header-inner { max-width: 1280px; min-height: 88px; margin: auto; padding: 0 36px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 32px; }
+.brand { display: flex; align-items: center; gap: 15px; }
+.brand strong { display: block; font-size: 20px; font-weight: 650; letter-spacing: .07em; }
+.brand div > span { display: block; font-size: 9px; font-weight: 600; letter-spacing: .22em; color: var(--text-secondary); }
+.brand-mark { width: 32px; height: 32px; object-fit: contain; flex-shrink: 0; }
+.main-nav { display: flex; align-self: stretch; gap: 32px; }
+.main-nav a { display: flex; align-items: center; padding: 3px 4px 0; text-decoration: none; color: var(--text-secondary); border-bottom: 2px solid transparent; font-weight: 600; }
+.main-nav a:hover { color: var(--text-primary); }
+.main-nav a[aria-current="page"] { color: var(--text-primary); border-bottom-color: var(--accent-cyan); }
+.connection-badge { justify-self: end; font-size: 11px; }
+.status-badge { --state-color: var(--text-muted); display: inline-flex; align-items: center; gap: 9px; color: var(--state-color); font-size: 12px; line-height: 1.6; font-weight: 650; letter-spacing: .06em; }
+.status-badge::before { content: ""; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+[data-state="success"] { --state-color: var(--success); }
+[data-state="accent"] { --state-color: var(--accent-cyan); }
+[data-state="warning"] { --state-color: var(--warning); }
+[data-state="danger"] { --state-color: var(--danger); }
+.instrument-main { max-width: 1280px; margin: 0 auto; padding: 38px 36px 22px; }
+.page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 25px; }
+.eyebrow { color: var(--text-muted); font-size: 10px; font-weight: 600; letter-spacing: .16em; margin-bottom: 8px; }
+.page-caption { color: var(--text-muted); font-size: 12px; padding-bottom: 3px; }
+.card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); }
+.device-card { padding: 23px 28px; margin-bottom: 22px; }
+.device-layout { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(150px, .8fr) auto; align-items: center; gap: 24px; }
+.label { color: var(--text-secondary); font-size: 12px; display: block; margin-bottom: 8px; }
+.device-name { font-size: 21px; letter-spacing: .01em; }
+.device-interface { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+.interface-icon { color: var(--accent-cyan); margin-right: 3px; }
+.acquisition-block .status-badge { font-size: 13px; }
+.actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 40px; padding: 10px 17px; border: 1px solid transparent; border-radius: 6px; font-size: 11px; line-height: 1.5; font-weight: 650; letter-spacing: .045em; cursor: pointer; transition: background-color 120ms, border-color 120ms; }
+.button-primary { background: #117bb9; color: white; border-color: #198ecf; }
+.button-primary:hover:not(:disabled) { background: #168acb; border-color: var(--accent-hover); }
+.button-secondary { color: #8fd4f7; border-color: #376581; background: transparent; }
+.button-secondary:hover:not(:disabled) { background: #19334a; border-color: var(--accent); }
+.button-stop { color: var(--danger); border-color: #74505a; background: transparent; }
+.button-stop:hover:not(:disabled) { background: #352933; border-color: var(--danger); }
+.button-quiet { color: var(--text-secondary); background: transparent; padding-left: 4px; padding-right: 0; font-size: 11px; font-weight: 400; letter-spacing: 0; text-decoration: underline; text-underline-offset: 3px; }
+.button:disabled { opacity: .36; cursor: not-allowed; }
+.button-full { width: 100%; }
+.support-note:empty, .message:empty, .hint:empty { display: none; }
+.support-note { color: var(--warning); font-size: 12px; margin-top: 15px; }
+.measurement-card { padding: 25px 30px 20px; }
+.card-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+.card-heading .eyebrow { margin-bottom: 5px; }
+.frame-label { color: var(--text-secondary); font-size: 12px; }
+.readout-labels { display: grid; grid-template-columns: 1fr auto 1fr auto; column-gap: 64px; font-size: 9px; color: var(--text-muted); letter-spacing: .15em; padding-bottom: 7px; }
+.readout-labels span:nth-child(2), .readout-labels span:nth-child(4) { text-align: right; }
+.channel-grid { display: grid; grid-auto-flow: column; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(7, minmax(47px, auto)); column-gap: 64px; }
+.channel-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 0 6px; border-bottom: 1px solid var(--border-soft); }
+.channel-name { color: var(--text-secondary); font-size: 13px; letter-spacing: .035em; }
+.reading-value { font: 500 23px/1.3 "Cascadia Code", Consolas, ui-monospace, monospace; color: var(--text-primary); letter-spacing: -.04em; }
+.channel-row[data-empty="true"] .reading-value { color: #60788b; }
+.reference-channel .channel-name { color: var(--accent-cyan); }
+.readout-note { margin-top: 16px; font-size: 11px; color: var(--text-muted); }
+.sample-summary { border: 1px solid var(--border); background: var(--bg-panel-alt); border-radius: var(--radius); margin-top: 18px; padding: 21px 30px; }
+.sample-summary dl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+.sample-summary dt { color: var(--text-secondary); font-size: 11px; margin-bottom: 8px; }
+.sample-summary dd { font-size: 19px; font-weight: 500; }
+.sample-summary .status-badge { font-size: 12px; }
+.setup-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: start; gap: 22px; }
+.setup-card, .active-card { padding: 27px 28px; }
+.read-only-label { font-size: 9px; letter-spacing: .1em; color: var(--text-muted); }
+fieldset { min-width: 0; border: 0; padding: 0; margin: 0; }
+.setup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 23px 22px; }
+.setup-grid label:not(.switch) { display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+input:not([type="checkbox"]), select { width: 100%; min-width: 0; min-height: 43px; padding: 10px 12px; border: 1px solid #355068; border-radius: 6px; background: var(--bg-input); color: var(--text-primary); }
+select { padding-right: 24px; }
+input:focus, select:focus { border-color: var(--accent); }
+input:disabled, select:disabled, fieldset:disabled .switch { opacity: .45; cursor: not-allowed; }
+.input-with-unit { display: flex; align-items: center; background: var(--bg-input); border: 1px solid #355068; border-radius: 6px; }
+.input-with-unit:focus-within { border-color: var(--accent); outline: 2px solid var(--accent-cyan); outline-offset: 3px; }
+.input-with-unit input { border: 0; background: transparent; }
+.input-with-unit input:focus-visible { outline: 0; }
+.input-unit { padding: 0 12px 0 4px; color: var(--text-muted); font-size: 11px; }
+.led-field { display: flex; flex-direction: column; }
+.led-field > .label { margin-bottom: 8px; }
+.switch { position: relative; display: inline-flex; align-items: center; gap: 12px; min-height: 43px; cursor: pointer; align-self: start; }
+.switch input { position: absolute; width: 42px; height: 24px; margin: 0; opacity: 0; }
+.switch-track { width: 42px; height: 24px; border-radius: 20px; background: #344a5c; border: 1px solid #536b7b; transition: background-color 120ms; }
+.switch-track::after { content: ""; display: block; width: 16px; height: 16px; border-radius: 50%; margin: 3px; background: #bdcbd5; transition: transform 120ms; }
+.switch input:checked + .switch-track { background: #167fb3; border-color: #219ed6; }
+.switch input:checked + .switch-track::after { transform: translateX(18px); background: white; }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--accent-cyan); outline-offset: 4px; }
+.switch output { font-size: 12px; color: var(--text-primary); font-weight: 600; }
+.setup-footer { border-top: 1px solid var(--border-soft); margin-top: 26px; padding-top: 20px; }
+.setup-footer .button { width: 100%; margin-top: 14px; }
+.hint { color: var(--text-muted); font-size: 11px; line-height: 1.6; }
+.config-row { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 1.3fr); gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--border-soft); font-size: 12px; }
+.config-row:first-child { padding-top: 0; }
+.config-row dt { color: var(--text-secondary); }
+.config-row dd { color: var(--text-primary); text-align: right; overflow-wrap: anywhere; font-weight: 500; }
+.configuration-status { margin: 22px 0; }
+.configuration-status .hint { margin-top: 8px; }
+.notice { color: var(--text-secondary); font-size: 13px; padding: 12px 0 20px; }
+.message { margin-top: 18px; padding: 13px 16px; border-left: 2px solid var(--danger); background: #241f2a; color: #f2b0b0; font-size: 13px; }
+.advanced-debug { margin-top: 26px; color: var(--text-secondary); }
+.advanced-debug summary { display: list-item; cursor: pointer; padding: 13px 0; font-size: 12px; }
+.debug-caption { color: var(--text-muted); font-size: 11px; margin-left: 15px; }
+.debug-content { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 40px; padding: 22px 24px; margin-top: 8px; background: var(--bg-panel-alt); border-radius: 8px; }
+.debug-content h2 { font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
+.debug-content pre { font: 11px/1.7 Consolas, ui-monospace, monospace; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-muted); }
+.debug-content .hint { margin-top: 10px; }
+.debug-log-section { grid-column: 1 / -1; }
+.debug-log-section pre { max-height: 240px; overflow: auto; }
+.instrument-footer { display: flex; justify-content: space-between; margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border-soft); color: var(--text-muted); font-size: 9px; letter-spacing: .075em; }
+@media (min-width: 1400px) { .instrument-main { padding-top: 46px; } }
+@media (max-width: 1100px) {
+  .device-layout { grid-template-columns: 1fr 1fr; }
+  .device-actions { grid-column: 1 / -1; }
+  .acquisition-block { justify-self: end; }
+  .setup-layout { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+  .setup-grid { grid-template-columns: 1fr; gap: 18px; }
+}
+@media (max-width: 760px) {
+  .header-inner { padding: 0 20px; min-height: 80px; gap: 15px; grid-template-columns: 1fr auto; }
+  .brand strong { font-size: 17px; }
+  .brand-mark { width: 26px; height: 26px; }
+  .main-nav { grid-row: 2; grid-column: 1 / -1; justify-content: center; min-height: 47px; }
+  .connection-badge { grid-column: 2; grid-row: 1; font-size: 10px; }
+  .instrument-main { padding: 26px 18px 20px; }
+  .page-caption { display: none; }
+  .device-card, .measurement-card, .setup-card, .active-card { padding: 22px; }
+  .channel-grid { column-gap: 28px; }
+  .readout-labels { column-gap: 28px; }
+  .reading-value { font-size: 20px; }
+  .setup-layout { grid-template-columns: 1fr; }
+  .setup-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sample-summary { padding: 20px 22px; }
+  .sample-summary dl { grid-template-columns: 1fr 1fr; gap: 20px; }
+  .card-heading { align-items: flex-start; gap: 12px; }
+  .debug-content { grid-template-columns: 1fr; }
+  .debug-caption { display: block; margin: 4px 0 0; }
+}
+@media (max-width: 420px) {
+  .setup-grid { grid-template-columns: 1fr; }
+  .device-actions { gap: 8px; }
+  .button { padding: 9px 12px; }
+  .device-actions .button-quiet { flex-basis: 100%; justify-content: flex-start; }
+  .channel-grid { grid-auto-flow: row; grid-template-columns: 1fr; grid-template-rows: none; }
+  .readout-labels { grid-template-columns: 1fr auto; }
+  .readout-labels span:nth-child(n+3) { display: none; }
+  .instrument-footer { flex-direction: column; gap: 6px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
 
   </style>
 </head>
 <body>
-  <main>
-    <header><p class="eyebrow">ATLANTES / HITO 3</p><h1>TCS3448 · BLE Web</h1><p>Control de adquisición y lectura de canales espectrales.</p></header>
-    <section aria-labelledby="connection-title">
-      <h2 id="connection-title">Conexión</h2>
-      <p id="connection" role="status">Desconectado</p>
-      <div class="actions"><button id="connect">Connect</button><button id="disconnect" disabled>Disconnect</button></div>
-      <p id="support" class="hint">Abre este archivo en un navegador con Web Bluetooth. También funciona desde HTTPS.</p>
-    </section>
-    <div class="columns">
-      <section aria-labelledby="sensor-title">
-        <h2 id="sensor-title">Dispositivo</h2>
-        <div class="actions"><button id="start" disabled>Start</button><button id="stop" disabled>Stop</button><button id="refresh" disabled>Actualizar estado</button></div>
-        <pre id="status" aria-live="polite">Sin estado disponible</pre>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="instrument-header">
+    <div class="header-inner">
+      <div class="brand"><img class="brand-mark" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACyklEQVR4AexUSUwUURB91d0zQVSigHpE0XjABeQkKsYl3FzuJjBKYjR60iseOHLygHrAizBuEdG4RYN6M+4SlwRXFvWgJgiiQhCmu8vX3c4kjMyQDCFc5qeq61X9qvqvqxcDM7yyBLITyE4gO4EpTEAFLbFLaLEvA8QZ/tAyJ9Bsr4MYayAoI4n1yHBlTkCwgXd+lwTuwDSIM2MwBQJSAnU7Of1OOM6KzI4HMiegWMrybrjaDZHi6SMQ/TYbrRr+7wDBYqjZC4sqsgTJy6vxapPjSX76CUSVjQt7MWq/QNOX3ETtKc2BYBGG8Qk/8ZnxBTiqs2gD8fAf+zlQ+BFnNe100hMQex8EF9l1ADkLt9MG4o4WQTGAgzLkK9CP+WNFwSav+Q5zZRBwL8C29zOSUtITUNnMypuA4b3tlcSBWFYxCfQEDq+CXoTCnBaxJwLmCmuMWzCwCWlWagKtHKlgNUzzMVQ72Kg80ceUZTCkK+EruqCx5QlftBxidMA1H0FlFZo0N7GXBFITGLMrWdyFXfIdYj4jLoX37L0Gqivhum886KvKa8As8XGQU0b8FBHph+gH5Nob6U8oqQmo7IW4bX5VtXzl83wLw9kJVWFsC0LWfdp/4j5gfCtVYDk7GHwHv4ZIjTZ4vQgnkoBAi1bgjFOH5tgRRGlP2+egKMfv4cZEkUo9X8hjzLsCyBDe4x7iq8ci1l/cu8G64xDmxvcco5GxUkTt84jG6qjBGc0x//cdEHBG8zjSAhhGPu+0AK68gm2uxYF5P+J9UGNd5x1yAnIbplGFenERXx7WkSrWXoW621BtXYtvYY8MwhmpgOpLxtgbBb41MIcWAYHanHbUhA6jxqTSRswG1EqflzBOI6GHzDkB770Yt0EnkteP6vBJRMJP6I2X2rl9iIQa/DN2hw6xh3dOu5cUEPDQDGmWQHYC2QlM+wQm+7r/AgAA///amq39AAAABklEQVQDAKdk8EE8Z7mVAAAAAElFTkSuQmCC" alt="" width="32" height="32"><div><strong>TCS3448</strong><span>SPECTRAL SENSOR</span></div></div>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a id="nav-measurement" href="#/measurement" aria-current="page">Measurement</a>
+        <a id="nav-setup" href="#/setup" aria-current="false">Setup</a>
+      </nav>
+      <span id="connection" class="status-badge connection-badge" data-state="muted" role="status">DISCONNECTED</span>
+    </div>
+  </header>
+  <main id="main-content" class="instrument-main" tabindex="-1">
+    <div id="measurement-view">
+      <div class="page-heading"><div><p class="eyebrow">MEASUREMENT</p><h1 id="measurement-title">Spectral measurement</h1></div><p class="page-caption">Raw ADC channel readout</p></div>
+      <section class="card device-card" aria-labelledby="device-title">
+        <div class="device-layout">
+          <div><p id="device-title" class="label">Device</p><h2 id="device-name" class="device-name">TCS3448</h2><p class="device-interface"><span class="interface-icon" aria-hidden="true">↔</span> Web Bluetooth</p></div>
+          <div class="acquisition-block"><p class="label">Acquisition status</p><span id="acquisition-state" class="status-badge" data-state="muted" role="status">IDLE</span></div>
+          <div class="actions device-actions">
+            <button id="connect" class="button button-secondary"><span aria-hidden="true">↗</span> CONNECT</button>
+            <button id="start" class="button button-primary" disabled><span aria-hidden="true">▶</span> START</button>
+            <button id="stop" class="button button-stop" disabled><span aria-hidden="true">■</span> STOP</button>
+            <button id="disconnect" class="button button-quiet" disabled>Disconnect</button>
+          </div>
+        </div>
+        <p id="support" class="support-note"></p>
       </section>
-      <section aria-labelledby="config-title">
-        <h2 id="config-title">Configuración actual <small>Solo lectura</small></h2>
-        <pre id="config">Conecta el dispositivo para consultar la configuración.</pre>
+      <section class="card measurement-card" aria-labelledby="readout-title">
+        <div class="card-heading"><div><p class="eyebrow">SPECTRAL MEASUREMENT</p><h2 id="readout-title">Latest sample</h2></div><span id="frame-label" class="frame-label">Waiting for a sample</span></div>
+        <div class="readout-labels" aria-hidden="true"><span>CHANNEL</span><span>COUNTS</span><span>CHANNEL</span><span>COUNTS</span></div>
+        <dl id="sample-readout" class="channel-grid" aria-label="Physical channel counts"></dl>
+        <p class="readout-note">— Not acquired in the current mode</p>
+      </section>
+      <section class="sample-summary" aria-label="Latest sample summary">
+        <dl><div><dt>Sample</dt><dd id="summary-sample">—</dd></div><div><dt>Gain</dt><dd id="summary-gain">—</dd></div><div><dt>Integration</dt><dd id="summary-integration">—</dd></div><div><dt>Status</dt><dd><span id="sample-state" class="status-badge" data-state="muted" role="status">IDLE</span></dd></div></dl>
       </section>
     </div>
-    <section aria-labelledby="samples-title">
-      <h2 id="samples-title">Última muestra</h2>
-      <p class="hint">Valores ADC sin calibrar. Se muestran los 18 resultados del modo SMUX.</p>
-      <pre id="sample">Esperando adquisición…</pre>
-      <p id="received" class="hint">0 muestras completas recibidas</p>
-    </section>
-    <p id="message" role="alert"></p>
+    <div id="setup-view" hidden>
+      <div class="page-heading"><div><p class="eyebrow">SETUP</p><h1 id="setup-title">Sensor configuration</h1></div><p class="page-caption">Device settings &amp; confirmed values</p></div>
+      <p id="setup-disconnected" class="notice">Connect the sensor from <a id="setup-connect-link" href="#/measurement">Measurement</a> to read and edit its settings.</p>
+      <div class="setup-layout">
+        <section class="card setup-card" aria-labelledby="requested-title">
+          <div class="card-heading"><div><p class="eyebrow">REQUESTED CONFIGURATION</p><h2 id="requested-title">Sensor setup</h2></div><span class="read-only-label">EDITABLE</span></div>
+          <fieldset id="setup" disabled>
+            <legend class="sr-only">Requested sensor settings</legend>
+            <div class="setup-grid">
+              <label for="gain">Gain<select id="gain"></select></label>
+              <label for="integration">Integration time<div class="input-with-unit"><input id="integration" type="number" min="0.006" step="any" required aria-describedby="integration-unit"><span id="integration-unit" class="input-unit">ms</span></div></label>
+              <label for="led-current">LED current<div class="input-with-unit"><input id="led-current" type="number" min="4" max="258" step="2" required aria-describedby="led-current-unit"><span id="led-current-unit" class="input-unit">mA</span></div></label>
+              <div class="led-field"><span class="label">LED</span><label class="switch" for="led-enabled"><input id="led-enabled" type="checkbox" aria-label="LED enabled"><span class="switch-track" aria-hidden="true"></span><output id="led-label" for="led-enabled">OFF</output></label></div>
+              <label for="smux">Auto SMUX<select id="smux"><option value="6">6 channels</option><option value="12">12 channels</option><option value="18">18 channels</option></select></label>
+              <label for="autozero">Autozero<select id="autozero"><option value="1">Before first measurement</option><option value="2">Every measurement</option><option value="0">Disabled</option></select></label>
+              <label for="period">Sample period<div class="input-with-unit"><input id="period" type="number" min="1" max="2147483647" step="1" required aria-describedby="period-unit"><span id="period-unit" class="input-unit">ms</span></div></label>
+            </div>
+            <div class="setup-footer"><p class="hint">Changes become active after device confirmation.</p><button id="apply" class="button button-primary" disabled>APPLY CONFIGURATION</button></div>
+          </fieldset>
+        </section>
+        <section class="card active-card" aria-labelledby="active-title">
+          <div class="card-heading"><div><p class="eyebrow">DEVICE READBACK</p><h2 id="active-title">Active configuration</h2></div><span class="read-only-label">READ ONLY</span></div>
+          <dl id="config" class="config-list" aria-label="Confirmed active configuration"></dl>
+          <div class="configuration-status"><span id="config-state" class="status-badge" data-state="muted" role="status">NOT AVAILABLE</span><p id="config-detail" class="hint"></p></div>
+          <button id="refresh" class="button button-secondary button-full" disabled>Read from device</button>
+        </section>
+      </div>
+    </div>
+    <p id="message" class="message" role="alert"></p>
+    <details id="advanced-debug" class="advanced-debug">
+      <summary>Advanced / Raw Debug <span class="debug-caption">SMUX data &amp; device diagnostics</span></summary>
+      <div class="debug-content">
+        <div><h2>Raw SMUX data</h2><pre id="sample">No sample received</pre><p id="received" class="hint">0 complete samples received</p></div>
+        <div><h2>Technical status</h2><pre id="status">No device status</pre></div>
+        <div class="debug-log-section"><h2>BLE messages</h2><pre id="debug-log" aria-label="Recent BLE events"></pre></div>
+      </div>
+    </details>
+    <footer class="instrument-footer"><span>TCS3448 · SPECTRAL SENSOR</span><span>Web Bluetooth interface</span></footer>
   </main>
   <script>
 (() => {
 "use strict";
 const UUID = Object.freeze({
-  service: "a71a0001-3448-4c53-8a7e-41544c414e54",
-  status: "a71a0002-3448-4c53-8a7e-41544c414e54",
-  command: "a71a0003-3448-4c53-8a7e-41544c414e54",
-  sample: "a71a0004-3448-4c53-8a7e-41544c414e54",
-  config: "a71a0005-3448-4c53-8a7e-41544c414e54",
+  service: "34480001-7f2a-4f6c-9e31-8dbe0c2f5a70",
+  status: "34480002-7f2a-4f6c-9e31-8dbe0c2f5a70",
+  command: "34480003-7f2a-4f6c-9e31-8dbe0c2f5a70",
+  sample: "34480004-7f2a-4f6c-9e31-8dbe0c2f5a70",
+  config: "34480005-7f2a-4f6c-9e31-8dbe0c2f5a70",
 });
-const COMMAND = Object.freeze({ START: 1, STOP: 2, GET_STATUS: 3, GET_CONFIG: 4 });
+const COMMAND = Object.freeze({ START: 1, STOP: 2, GET_STATUS: 3, GET_CONFIG: 4, APPLY_CONFIG: 5 });
 const CHANNELS = Object.freeze([
   "FZ", "FY", "FXL", "NIR", "VIS_TL_0", "VIS_BR_0", "F2", "F3", "F4",
   "F6", "VIS_TL_1", "VIS_BR_1", "F1", "F7", "F8", "F5", "VIS_TL_2", "VIS_BR_2",
 ]);
 const GAINS = Object.freeze([0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]);
-const ERRORS = Object.freeze(["Ninguno", "Inicializacion", "Configuracion", "LED", "Comunicacion I2C", "Tiempo de espera agotado"]);
+const AUTOZERO = Object.freeze(["Disabled", "Before first measurement cycle", "Every integration cycle"]);
+const ERRORS = Object.freeze({
+  0: "OK", 1: "INITIALIZATION_FAILED", 2: "CONFIGURATION_INVALID", 3: "LED_FAILED",
+  4: "I2C_COMMUNICATION_FAILED", 5: "ACQUISITION_TIMEOUT", 6: "CONFIG_APPLY_FAILED",
+  16: "INVALID_GAIN", 17: "INVALID_INTEGRATION", 18: "INVALID_LED_CURRENT",
+  19: "INVALID_SMUX_MODE", 20: "INVALID_AUTOZERO", 21: "INVALID_SAMPLE_PERIOD",
+  22: "SAMPLE_PERIOD_TOO_SHORT", 23: "INVALID_CONFIG_PAYLOAD",
+});
 
-function validate(value, size) {
+function validate(value, size, version = 1) {
   if (!(value instanceof DataView) || value.byteLength !== size) throw new Error("Longitud de paquete incorrecta");
-  if (value.getUint8(0) !== 1) throw new Error("Version de protocolo incompatible");
+  if (value.getUint8(0) !== version) throw new Error("Version de protocolo incompatible");
 }
 function decodeStatus(value) {
   validate(value, 20);
@@ -88,14 +303,38 @@ function decodeStatus(value) {
   };
 }
 function decodeConfig(value) {
-  validate(value, 20);
-  if (value.getUint8(1) >= GAINS.length) throw new Error("Ganancia invalida");
+  validate(value, 20, 2);
+  const gainCode = value.getUint8(1);
+  const smux = value.getUint8(2);
+  const autozero = value.getUint8(3);
+  if (gainCode >= GAINS.length || ![6, 12, 18].includes(smux) || autozero > 2 || value.getUint8(4) > 1 || value.getUint8(5) > 1) throw new Error("Configuracion recibida invalida");
   return {
-    gain: GAINS[value.getUint8(1)], atime: value.getUint8(2), ledCurrentMa: value.getUint8(3),
-    astep: value.getUint16(4, true), intervalMs: value.getUint16(6, true),
-    integrationMs: value.getUint32(8, true) / 1000, i2cHz: value.getUint32(12, true),
-    sda: value.getUint8(16), scl: value.getUint8(17),
+    gainCode, gain: GAINS[gainCode], smux, autozero, ledEnabled: !!value.getUint8(4), valid: !!value.getUint8(5),
+    ledCurrentMa: value.getUint16(6, true), integrationMs: value.getUint32(8, true) / 1000,
+    intervalMs: value.getUint32(12, true), adcFullScale: value.getUint16(16, true), revision: value.getUint16(18, true),
   };
+}
+function validateRequested(config) {
+  if (!Number.isInteger(config.gainCode) || config.gainCode < 0 || config.gainCode >= GAINS.length) throw new Error("INVALID_GAIN");
+  if (!Number.isFinite(config.integrationMs) || config.integrationMs <= 0 || Math.round(config.integrationMs * 1000) < 6 || config.integrationMs * 1000 > 0xffffffff) throw new Error("INVALID_INTEGRATION");
+  if (!Number.isInteger(config.ledCurrentMa) || config.ledCurrentMa < 4 || config.ledCurrentMa > 258 || config.ledCurrentMa % 2) throw new Error("INVALID_LED_CURRENT");
+  if (typeof config.ledEnabled !== "boolean") throw new Error("INVALID_CONFIG_PAYLOAD");
+  if (![6, 12, 18].includes(config.smux)) throw new Error("INVALID_SMUX_MODE");
+  if (!Number.isInteger(config.autozero) || config.autozero < 0 || config.autozero > 2) throw new Error("INVALID_AUTOZERO");
+  if (!Number.isInteger(config.intervalMs) || config.intervalMs <= 0 || config.intervalMs > 0x7fffffff) throw new Error("INVALID_SAMPLE_PERIOD");
+  // This is a superficial check only. Firmware adds SMUX/autozero timing margins.
+  if (config.intervalMs < config.integrationMs * (config.smux / 6)) throw new Error("SAMPLE_PERIOD_TOO_SHORT");
+  return config;
+}
+function encodeApply(config) {
+  validateRequested(config);
+  const bytes = new Uint8Array(20);
+  const view = new DataView(bytes.buffer);
+  bytes.set([0xa4, 2, config.gainCode, config.smux, config.autozero, Number(config.ledEnabled)]);
+  view.setUint16(6, config.ledCurrentMa, true);
+  view.setUint32(8, Math.round(config.integrationMs * 1000), true);
+  view.setUint32(12, config.intervalMs, true);
+  return bytes;
 }
 class SampleAssembler {
   constructor() { this.reset(); }
@@ -118,10 +357,10 @@ class SampleAssembler {
       this.reset();
       const data = new DataView(pending.bytes.buffer);
       validate(data, 48);
-      if (data.getUint32(4, true) !== sequence || data.getUint8(3) !== 18 || data.getUint8(2) > 1 || data.getUint8(1) >= GAINS.length) throw new Error("Muestra invalida");
+      if (data.getUint32(4, true) !== sequence || ![6, 12, 18].includes(data.getUint8(3)) || data.getUint8(2) > 1 || data.getUint8(1) >= GAINS.length) throw new Error("Muestra invalida");
       return {
         sequence, timestampMs: data.getUint32(8, true), gain: GAINS[data.getUint8(1)],
-        saturated: !!data.getUint8(2), channels: CHANNELS.map((name, i) => [name, data.getUint16(12 + i * 2, true)]),
+        saturated: !!data.getUint8(2), channelCount: data.getUint8(3), channels: CHANNELS.slice(0, data.getUint8(3)).map((name, i) => [name, data.getUint16(12 + i * 2, true)]),
       };
     } catch (error) {
       this.reset();
@@ -131,49 +370,219 @@ class SampleAssembler {
 }
 
 
-const el = Object.fromEntries(["connect", "disconnect", "start", "stop", "refresh", "connection", "support", "status", "config", "sample", "received", "message"].map(id => [id, document.getElementById(id)]));
+const PHYSICAL_CHANNELS = ["F1", "F2", "FZ", "F3", "F4", "F5", "FY", "FXL", "F6", "F7", "F8", "NIR", "VIS TL", "VIS BR"];
+
+function physicalReadings(sample) {
+  const values = new Map(sample?.channels || []);
+  // VIS is represented by the first SMUX cycle; other cycles stay in Raw Debug.
+  return PHYSICAL_CHANNELS.map(name => ({
+    name, value: values.get(name === "VIS TL" ? "VIS_TL_0" : name === "VIS BR" ? "VIS_BR_0" : name) ?? null,
+  }));
+}
+
+function createInstrumentUI(el) {
+  const node = (tag, className, text) => {
+    const element = document.createElement(tag);
+    element.className = className;
+    if (text !== undefined) element.textContent = String(text);
+    return element;
+  };
+  const badge = (element, text, state) => {
+    element.textContent = text;
+    element.dataset.state = state;
+  };
+  const dash = "\u2014";
+  const logs = [];
+  let lastStatusKey = "";
+  let lastSample = null;
+  let lastStatus = null;
+  const debug = text => {
+    logs.push(`${new Date().toLocaleTimeString()}  ${text}`);
+    if (logs.length > 40) logs.shift();
+    el["debug-log"].textContent = logs.join("\n");
+  };
+  function showView(view, updateHash = false) {
+    const setup = view === "setup";
+    el["measurement-view"].hidden = setup;
+    el["setup-view"].hidden = !setup;
+    el["nav-measurement"].setAttribute("aria-current", setup ? "false" : "page");
+    el["nav-setup"].setAttribute("aria-current", setup ? "page" : "false");
+    document.title = `TCS3448 | ${setup ? "Sensor Setup" : "Measurement"}`;
+    if (updateHash) window.location.hash = setup ? "#/setup" : "#/measurement";
+  }
+  el["nav-measurement"].addEventListener("click", event => { event.preventDefault(); showView("measurement", true); });
+  el["nav-setup"].addEventListener("click", event => { event.preventDefault(); showView("setup", true); });
+  el["setup-connect-link"].addEventListener("click", event => { event.preventDefault(); showView("measurement", true); });
+  window.addEventListener("hashchange", () => {
+    const hash = window.location.hash;
+    if (hash === "#/setup" || hash === "#/measurement") showView(hash.slice(2));
+  });
+  showView(window.location.hash === "#/setup" ? "setup" : "measurement");
+
+  function readings(sample) {
+    el["sample-readout"].replaceChildren(...physicalReadings(sample).map(({ name, value }) => {
+      const row = node("div", `channel-row${name.startsWith("VIS") ? " reference-channel" : ""}`);
+      row.append(node("dt", "channel-name", name), node("dd", "reading-value", value === null ? dash : value));
+      if (value === null) row.dataset.empty = "true";
+      return row;
+    }));
+  }
+  function sampleState() {
+    if (lastStatus && (!lastStatus.ready || (lastStatus.error > 0 && lastStatus.error < 16))) {
+      badge(el["sample-state"], "ERROR", "danger");
+    } else if (lastSample) {
+      badge(el["sample-state"], lastSample.saturated ? "SATURATED" : "VALID", lastSample.saturated ? "danger" : "success");
+    } else {
+      badge(el["sample-state"], lastStatus?.acquiring ? "MEASURING" : "IDLE", lastStatus?.acquiring ? "accent" : "muted");
+    }
+  }
+  function clearSample() {
+    lastSample = null;
+    readings(null);
+    el["summary-sample"].textContent = dash;
+    el["summary-gain"].textContent = dash;
+    el["summary-integration"].textContent = dash;
+    el["frame-label"].textContent = "Waiting for a sample";
+    sampleState();
+  }
+  const configurationState = (text, state, detail = "") => {
+    badge(el["config-state"], text, state);
+    el["config-detail"].textContent = detail;
+  };
+  function config(c) {
+    const zero = c?.autozero === 1 ? "Before first measurement" : c?.autozero === 2 ? "Every measurement" : AUTOZERO[0];
+    const rows = [
+      ["Gain", c?.valid ? `${c.gain}x` : dash],
+      ["Integration", c?.valid ? `${c.integrationMs.toFixed(3)} ms` : dash],
+      ["LED Current", c?.valid ? `${c.ledCurrentMa} mA` : dash],
+      ["LED", c?.valid ? (c.ledEnabled ? "ON" : "OFF") : dash],
+      ["Auto SMUX", c?.valid ? `${c.smux} channels` : dash],
+      ["Autozero", c?.valid ? zero : dash],
+      ["Sample Period", c?.valid ? `${c.intervalMs} ms` : dash],
+      ["ADC Full Scale", c?.valid ? `${c.adcFullScale} counts` : dash],
+    ];
+    el.config.replaceChildren(...rows.map(([name, value]) => {
+      const row = node("div", "config-row");
+      row.append(node("dt", "", name), node("dd", "", value));
+      return row;
+    }));
+    configurationState(c?.valid ? "CONFIGURATION VALID" : "NOT AVAILABLE", c?.valid ? "success" : "muted");
+    if (c?.valid) debug(`CONFIG revision=${c.revision} gain=${c.gain}x integration=${c.integrationMs}ms SMUX=${c.smux} LED=${c.ledCurrentMa}mA/${c.ledEnabled ? "ON" : "OFF"}`);
+  }
+  function connection(state, name = "TCS3448") {
+    badge(el.connection, state.toUpperCase(), state === "connected" ? "success" : state === "connecting" ? "warning" : "muted");
+    el["device-name"].textContent = name;
+    el["setup-disconnected"].hidden = state === "connected";
+  }
+  function status(s) {
+    lastStatus = s;
+    const error = s && (!s.ready || (s.error > 0 && s.error < 16));
+    badge(el["acquisition-state"], error ? "ERROR" : s?.acquiring ? "RUNNING" : "IDLE", error ? "danger" : s?.acquiring ? "accent" : "muted");
+    const key = s ? `${s.ready}/${s.acquiring}/${s.error}` : "disconnected";
+    if (key !== lastStatusKey) { debug(s ? `STATUS ready=${Number(s.ready)} running=${Number(s.acquiring)} error=${s.error}` : "DISCONNECTED"); lastStatusKey = key; }
+    sampleState();
+  }
+  function sample(sample, integrationMs) {
+    lastSample = sample;
+    readings(sample);
+    el["summary-sample"].textContent = `#${sample.sequence}`;
+    el["summary-gain"].textContent = `${sample.gain}x`;
+    el["summary-integration"].textContent = Number.isFinite(integrationMs) ? `${integrationMs.toFixed(3)} ms` : dash;
+    el["frame-label"].textContent = `Sample #${sample.sequence}`;
+    sampleState();
+  }
+  function led() { el["led-label"].textContent = el["led-enabled"].checked ? "ON" : "OFF"; }
+  el["led-enabled"].addEventListener("change", led);
+  return { debug, showView, connection, status, config, configurationState, sample, clearSample, led };
+}
+
+
+const ids = ["connect", "disconnect", "start", "stop", "refresh", "apply", "setup", "gain", "integration", "led-current", "led-enabled", "smux", "autozero", "period", "connection", "support", "status", "config", "config-state", "sample", "received", "message", "nav-measurement", "nav-setup", "measurement-view", "setup-view", "setup-connect-link", "setup-disconnected", "acquisition-state", "device-name", "sample-readout", "summary-sample", "summary-gain", "summary-integration", "sample-state", "frame-label", "debug-log", "config-detail", "led-label"];
+const el = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 const assembler = new SampleAssembler();
+const ui = createInstrumentUI(el);
+let applyingConfig = false;
 let device = null;
 let characteristics = null;
 let latestStatus = null;
+let activeConfig = null;
 let busy = false;
 let received = 0;
 let lastSequence = null;
 let missed = 0;
 const supported = !!navigator.bluetooth && window.isSecureContext;
+el.gain.replaceChildren(...GAINS.map((gain, code) => new Option(`${gain}x`, String(code))));
 
 function controls() {
   const linked = !!characteristics && !!device?.gatt?.connected;
+  const ready = linked && latestStatus?.ready && activeConfig?.valid;
   el.connect.disabled = busy || linked || !supported;
   el.disconnect.disabled = busy || !linked;
-  el.start.disabled = busy || !linked || !latestStatus?.ready || !!latestStatus?.acquiring;
+  el.start.disabled = busy || !ready || !!latestStatus?.acquiring;
   el.stop.disabled = busy || !linked || !latestStatus?.ready;
   el.refresh.disabled = busy || !linked;
+  el.setup.disabled = busy || !ready;
+  el.apply.disabled = busy || !ready;
 }
-function showError(error) { el.message.textContent = error.message || String(error); }
+function showError(error) {
+  const detail = error.message || String(error);
+  ui.debug(`ERROR ${detail}`);
+  const messages = {
+    INVALID_GAIN: "Select a supported gain.", INVALID_INTEGRATION: "Enter a supported integration time greater than zero.",
+    INVALID_LED_CURRENT: "LED current must be an even value between 4 and 258 mA.",
+    INVALID_SMUX_MODE: "Select 6, 12 or 18 channels.", INVALID_AUTOZERO: "Select a supported autozero mode.",
+    INVALID_SAMPLE_PERIOD: "Enter a positive whole-number sample period.",
+    SAMPLE_PERIOD_TOO_SHORT: "Sample period is too short for these sensor settings. Increase the period.",
+    CONFIG_APPLY_FAILED: "The device could not apply the settings. Read the active configuration before continuing.",
+    ACK_TIMEOUT: "The device has not confirmed the change. Read the active configuration before retrying.",
+    INITIALIZATION_FAILED: "The sensor is unavailable. Check the device and reconnect.",
+  };
+  const key = Object.keys(messages).find(key => detail.includes(key));
+  el.message.textContent = messages[key] || (error.name === "NotFoundError" ? "No device selected." : "The operation could not be completed. Check the connection and try again. Details are available in Advanced Debug.");
+}
 function showStatus(value) {
+  const previousError = latestStatus?.error;
   latestStatus = decodeStatus(value);
   const s = latestStatus;
   el.status.textContent = [
-    `Sensor: ${s.ready ? "Inicializado" : "No disponible"}`,
-    `Adquisición: ${s.acquiring ? "Activa" : "Detenida"}`,
-    `Error: ${ERRORS[s.error] ?? s.error}`,
-    `Muestras adquiridas: ${s.sampleCount}`,
-    `Periodo solicitado: ${s.intervalMs} ms`,
+    `Sensor / configuracion conocida: ${s.ready ? "SI" : "NO"}`,
+    `Acquisition: ${s.acquiring ? "RUNNING" : "STOPPED"}`,
+    `Error / ultima respuesta: ${ERRORS[s.error] ?? s.error}`,
+    `Muestras adquiridas: ${s.sampleCount}`, `Sample period: ${s.intervalMs} ms`,
     `Tiempo desde arranque: ${(s.uptimeMs / 1000).toFixed(1)} s`,
   ].join("\n");
+  if (!s.ready || (s.error > 0 && s.error < 16 && s.error !== previousError)) {
+    activeConfig = null;
+    ui.config(null);
+    ui.configurationState("CHECK DEVICE", "warning", "Read the active configuration before continuing.");
+  }
+  ui.status(s);
   controls();
   return s;
 }
-function showConfig(value) {
-  const c = decodeConfig(value);
-  el.config.textContent = [
-    latestStatus?.ready ? "Aplicada al sensor" : "Valores previstos; sensor sin inicializar",
-    `Ganancia: ${c.gain}x`, `ATIME / ASTEP: ${c.atime} / ${c.astep}`,
-    `Integración por ciclo: ${c.integrationMs.toFixed(2)} ms`,
-    `Periodo solicitado: ${c.intervalMs} ms`, `Corriente LED: ${c.ledCurrentMa} mA`,
-    `I2C: ${c.i2cHz} Hz · SDA ${c.sda} · SCL ${c.scl}`,
-  ].join("\n");
+function fillRequested(c) {
+  el.gain.value = String(c.gainCode);
+  el.integration.value = String(c.integrationMs);
+  el["led-current"].value = String(c.ledCurrentMa);
+  el["led-enabled"].checked = c.ledEnabled;
+  el.smux.value = String(c.smux);
+  el.autozero.value = String(c.autozero);
+  el.period.value = String(c.intervalMs);
+  ui.led();
+}
+function showConfig(value, fill = false) {
+  activeConfig = decodeConfig(value);
+  const c = activeConfig;
+  ui.config(c);
+  if (fill && c.valid) fillRequested(c);
+  controls();
+}
+function requestedConfig() {
+  return {
+    gainCode: Number(el.gain.value), integrationMs: Number(el.integration.value),
+    ledCurrentMa: Number(el["led-current"].value), ledEnabled: el["led-enabled"].checked,
+    smux: Number(el.smux.value), autozero: Number(el.autozero.value), intervalMs: Number(el.period.value),
+  };
 }
 function onStatus(event) {
   try { showStatus(event.target.value); } catch (error) { showError(error); }
@@ -188,13 +597,14 @@ function onSample(event) {
       missed += delta - 1;
     }
     lastSequence = sample.sequence;
+    ui.sample(sample, !applyingConfig && activeConfig?.valid ? activeConfig.integrationMs : undefined);
     ++received;
     el.sample.textContent = [
-      `Muestra #${sample.sequence} · ESP32 ${sample.timestampMs} ms`,
-      `Ganancia: ${sample.gain}x · Saturación: ${sample.saturated ? "SÍ" : "No"}`, "",
+      `Muestra #${sample.sequence} - ESP32 ${sample.timestampMs} ms - ${sample.channelCount} channels`,
+      `Gain: ${sample.gain}x - Saturacion: ${sample.saturated ? "SI" : "No"}`, "",
       ...sample.channels.map(([name, value]) => `${name.padEnd(10)} ${String(value).padStart(5)}`),
     ].join("\n");
-    el.received.textContent = `${received} muestras completas recibidas · ${missed} muestras omitidas entre las recibidas`;
+    el.received.textContent = `${received} muestras completas recibidas - ${missed} muestras omitidas entre las recibidas`;
   } catch (error) { showError(error); }
 }
 function clearConnection() {
@@ -203,38 +613,48 @@ function clearConnection() {
     characteristics.sample.removeEventListener("characteristicvaluechanged", onSample);
   }
   characteristics = null;
-  latestStatus = null;
+  latestStatus = activeConfig = null;
   assembler.reset();
   lastSequence = null;
-  el.connection.textContent = "Desconectado";
-  el.status.textContent = "Sin conexión; adquisición detenida en el dispositivo al detectar la desconexión.";
-  el.config.textContent = "Conecta el dispositivo para consultar la configuración.";
-  el.sample.textContent = "Sin muestra de la conexión actual.";
+  ui.connection("disconnected");
+  ui.status(null);
+  ui.clearSample();
+  el.status.textContent = "Sin estado de la conexion actual.";
+  ui.config(null);
+  el.sample.textContent = "Sin muestra de la conexion actual.";
+  for (const id of ["gain", "integration", "led-current", "smux", "autozero", "period"]) el[id].value = "";
+  el["led-enabled"].checked = false;
+  ui.led();
   controls();
 }
 
-async function sendCommand(name) {
+async function sendCommand(name, { payload, fill = false, allowUnavailable = false } = {}) {
   const current = characteristics;
   if (!current || !device?.gatt?.connected) throw new Error("Dispositivo desconectado");
-  // Poll for application-level completion; a GATT write acknowledgment only accepts the write.
+  ui.debug(`COMMAND ${name}`);
   const before = decodeStatus(await current.status.readValue()).counter;
-  await current.command.writeValueWithResponse(new TextEncoder().encode(name));
-  const deadline = Date.now() + 3500;
+  await current.command.writeValueWithResponse(payload || new TextEncoder().encode(name));
+  const deadline = Date.now() + 5000;
   while (Date.now() < deadline) {
-    if (characteristics !== current || !device?.gatt?.connected) throw new Error("Conexión perdida");
+    if (characteristics !== current || !device?.gatt?.connected) throw new Error("Conexion perdida");
     const status = showStatus(await current.status.readValue());
     if (status.counter !== before && (status.command === COMMAND[name] || status.command === 255)) {
-      if (status.result !== 0) {
-        const results = ["OK", "Comando desconocido", "Error del sensor", "Cola de comandos llena"];
-        throw new Error(`${name}: ${results[status.result] ?? status.result} (${ERRORS[status.error] ?? status.error})`);
+      ui.debug(`ACK ${name} counter=${status.counter} result=${status.result} error=${status.error}`);
+      if (name === "GET_CONFIG" || name === "APPLY_CONFIG") {
+        // Even failed APPLY returns the old verified config, or an explicit unknown flag.
+        showConfig(await current.config.readValue(), fill && status.result === 0);
       }
-      if (name === "GET_CONFIG") showConfig(await current.config.readValue());
-      if (name === "STOP") assembler.reset();
+      if (name === "STOP" || name === "APPLY_CONFIG") assembler.reset();
+      if (status.result !== 0) {
+        if (allowUnavailable && name === "GET_CONFIG" && !status.ready && status.result === 2) return;
+        const resultNames = ["OK", "UNKNOWN_COMMAND", "SENSOR_ERROR", "COMMAND_QUEUE_FULL", "INVALID_CONFIG", "CONFIG_APPLY_FAILED"];
+        throw new Error(`${name}: ${status.error ? ERRORS[status.error] ?? status.error : resultNames[status.result] ?? "COMMAND_FAILED"} (result=${status.result})`);
+      }
       return;
     }
     await new Promise(resolve => setTimeout(resolve, 100));
   }
-  throw new Error(`${name}: no se recibió confirmación del dispositivo`);
+  throw new Error(`${name}: ACK_TIMEOUT; consultar GET_CONFIG antes de reintentar`);
 }
 async function action(operation) {
   if (busy) return;
@@ -249,10 +669,11 @@ el.connect.addEventListener("click", () => action(async () => {
     device?.removeEventListener("gattserverdisconnected", clearConnection);
     device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UUID.service] }] });
     device.addEventListener("gattserverdisconnected", clearConnection);
-    el.connection.textContent = "Conectando…";
+    ui.connection("connecting");
     const server = await device.gatt.connect();
+    ui.connection("connected", device.name || "TCS3448");
+    ui.debug("GATT connected");
     const service = await server.getPrimaryService(UUID.service);
-    // Sequential GATT operations avoid overlapping requests on browser stacks.
     const status = await service.getCharacteristic(UUID.status);
     const command = await service.getCharacteristic(UUID.command);
     const sample = await service.getCharacteristic(UUID.sample);
@@ -265,12 +686,12 @@ el.connect.addEventListener("click", () => action(async () => {
     received = missed = 0;
     lastSequence = null;
     assembler.reset();
-    el.sample.textContent = "Esperando adquisición…";
+    el.sample.textContent = "Esperando adquisicion...";
     el.received.textContent = "0 muestras completas recibidas";
     await sendCommand("GET_STATUS");
-    await sendCommand("GET_CONFIG");
-    if (!device.gatt.connected) throw new Error("Conexión perdida durante la configuración");
-    el.connection.textContent = `Conectado · ${device.name || "ATLANTES-TCS3448"}`;
+    await sendCommand("GET_CONFIG", { fill: true, allowUnavailable: true });
+    if (!device.gatt.connected) throw new Error("Conexion perdida durante la configuracion");
+    ui.connection("connected", device.name || "TCS3448");
   } catch (error) {
     device?.gatt?.disconnect();
     clearConnection();
@@ -285,10 +706,27 @@ el.start.addEventListener("click", () => action(() => sendCommand("START")));
 el.stop.addEventListener("click", () => action(() => sendCommand("STOP")));
 el.refresh.addEventListener("click", () => action(async () => {
   await sendCommand("GET_STATUS");
-  await sendCommand("GET_CONFIG");
+  await sendCommand("GET_CONFIG", { fill: true, allowUnavailable: true });
 }));
-if (!supported) el.support.textContent = "Web Bluetooth no está disponible. Abre este archivo en un navegador compatible con Web Bluetooth o utiliza HTTPS.";
-controls();
+el.apply.addEventListener("click", () => action(async () => {
+  const payload = encodeApply(requestedConfig());
+  applyingConfig = true;
+  ui.configurationState("APPLYING", "warning", "Waiting for device confirmation.");
+  try {
+    await sendCommand("APPLY_CONFIG", { payload, fill: true });
+    ui.configurationState("CONFIGURATION VALID", "success", "Settings applied to the device.");
+    ui.clearSample();
+  } catch (error) {
+    if (error.message.includes("ACK_TIMEOUT")) {
+      activeConfig = null;
+      ui.config(null);
+    }
+    ui.configurationState(activeConfig?.valid ? "CONFIGURATION UNCHANGED" : "CHECK DEVICE", "warning", "Requested settings were not confirmed. Read from device to refresh.");
+    throw error;
+  } finally { applyingConfig = false; }
+}));
+if (!supported) el.support.textContent = "Web Bluetooth is unavailable in this browser. Use a compatible browser with Bluetooth enabled.";
+clearConnection();
 
 })();
   </script>

@@ -1,20 +1,24 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 
 const source = new URL("../web/src/", import.meta.url);
-const read = name => readFile(new URL(name, source), "utf8");
-const [template, css, protocol, app] = await Promise.all([
-  read("index.template.html"), read("style.css"), read("protocol.mjs"), read("app.mjs"),
+const read = async name => (await readFile(new URL(name, source), "utf8")).replace(/^\uFEFF/, "");
+const [template, css, protocol, ui, app, logo] = await Promise.all([
+  read("index.template.html"), read("style.css"), read("protocol.mjs"), read("ui.mjs"), read("app.mjs"),
+  readFile(new URL("../web/images/logo-signal.png", import.meta.url)),
 ]);
-// These two dependency-free modules share one private scope in the local HTML.
-const protocolScript = protocol.replace(/^export /gm, "");
-const appScript = app.replace(/^import \{[^\n]+\} from "\.\/protocol\.mjs";\r?\n/, "");
-if (/^\s*(?:import|export)\s/m.test(protocolScript + appScript)) {
+// The dependency-free protocol, presentation and BLE app share one private scope.
+const scripts = [protocol, ui, app].map(source => source
+  .replace(/^export /gm, "")
+  .replace(/^import \{[^\n]+\} from "\.\/(?:protocol|ui)\.mjs";\r?\n/gm, ""));
+if (scripts.some(source => /^\s*(?:import|export)\s/m.test(source))) {
   throw new Error("Unexpected module dependency in the standalone page");
 }
-const script = `(() => {\n"use strict";\n${protocolScript}\n${appScript}\n})();`
+const script = `(() => {\n"use strict";\n${scripts.join("\n")}\n})();`
   .replace(/<\/script/gi, "<\\/script");
-const html = template.replace("{{STYLE}}", () => css).replace("{{SCRIPT}}", () => script);
-if (/\{\{(?:STYLE|SCRIPT)\}\}/.test(html)) throw new Error("Unresolved HTML placeholder");
+const logoUri = `data:image/png;base64,${logo.toString("base64")}`;
+const html = template.replace("{{STYLE}}", () => css).replace("{{SCRIPT}}", () => script)
+  .replaceAll("{{LOGO}}", logoUri);
+if (/\{\{(?:STYLE|SCRIPT|LOGO)\}\}/.test(html)) throw new Error("Unresolved HTML placeholder");
 await mkdir(new URL("../web/dist/", import.meta.url), { recursive: true });
 await writeFile(new URL("../web/dist/index.html", import.meta.url), html, "utf8");
 console.log("Generated web/dist/index.html (standalone)");

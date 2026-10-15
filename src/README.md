@@ -8,8 +8,8 @@
 | --- | --- | --- |
 | `setup()` | Serial a 115200, espera inicial de 250 ms | Diagnóstico de arranque |
 | `setup()` | `TCS3448Manager::Init()` | Aplicar configuración; sensor detenido |
-| `setup()` | `AtlantesBLE::Init()` | Crear servicio GATT y anunciar dispositivo |
-| `loop()` | `AtlantesBLE::Update()` | Atender sesiones, comandos, adquisición y envío |
+| `setup()` | `TCS3448BLE::Init()` | Crear servicio GATT y anunciar dispositivo |
+| `loop()` | `TCS3448BLE::Update()` | Atender sesiones, comandos, adquisición y envío |
 | `loop()` | `processSerialCommands()` y `delay(1)` | Descartar entrada serie y ceder tiempo |
 
 BLE se inicializa aunque falle el sensor, para poder consultar el error desde la

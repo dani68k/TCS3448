@@ -1,0 +1,1204 @@
+Proyecto:
+Aplicación web BLE para control y lectura del sensor TCS3448 sobre ESP32.
+
+Entorno:
+- ESP32
+- PlatformIO
+- Arduino framework
+- VSCode
+- Web Bluetooth
+- TCS3448Manager ya implementado
+- BLE Web ya funcional
+- Hito 4 funcional o en desarrollo
+- La interfaz actual funciona, pero visualmente sigue siendo una interfaz de debug
+
+OBJETIVO DE ESTE CAMBIO
+=======================
+
+Transformar la interfaz web actual en una UI con aspecto de:
+
+- instrumento de laboratorio
+- equipo de medida
+- interfaz científica profesional
+- diseño técnico
+- dark mode
+
+IMPORTANTE:
+Este cambio es principalmente VISUAL / UX.
+
+NO quiero modificar innecesariamente:
+- protocolo BLE
+- comandos
+- JSON
+- características BLE
+- lógica de adquisición
+- TCS3448Manager
+- configuración del sensor
+- mapping de canales
+- flujo START / STOP
+- lógica de conexión
+- firmware salvo cambios mínimos estrictamente necesarios
+
+La funcionalidad actual debe seguir funcionando.
+
+NO implementar todavía:
+- histogramas
+- gráfica espectral real
+- normalización ADC %
+- transmitancia
+- absorbancia
+- DARK
+- REFERENCE
+- SAMPLE
+- curvas de calibración
+- análisis avanzado
+
+El objetivo es SOLO:
+1. separar Measurement y Setup en páginas distintas
+2. cambiar el diseño a dark mode
+3. dar aspecto de instrumental device
+4. mejorar jerarquía visual
+5. mantener la funcionalidad existente
+6. mantener documentación actualizada
+
+IMPORTANTE:
+NO debe aparecer ninguna referencia a "otros proyectos" en:
+- código
+- interfaz
+- comentarios
+- documentación
+- nombres de archivos
+- clases
+- textos visibles
+
+==================================================
+1. PRINCIPIO DE DISEÑO
+==================================================
+
+La aplicación debe dejar de parecer:
+- página web de debug
+- formulario Bootstrap genérico
+- consola de desarrollo
+
+Y debe parecer:
+- instrumento de laboratorio
+- software de equipo de medida
+- panel de control científico
+- interfaz técnica limpia y profesional
+
+Evitar:
+- colores chillones
+- estilo gaming
+- neón exagerado
+- estética cyberpunk
+- sombras excesivas
+- bordes por todas partes
+- demasiados recuadros anidados
+
+Buscar:
+- dark mode elegante
+- azul marino / azul grisáceo
+- cian/azul técnico
+- verde para estados OK
+- rojo únicamente para error/saturación
+- amarillo/ámbar para warning
+- tarjetas limpias
+- controles consistentes
+- tipografía legible
+- valores de medida con buena jerarquía
+
+==================================================
+2. SEPARAR PÁGINAS
+==================================================
+
+Quiero dos páginas:
+
+index.html
+= Measurement
+
+setup.html
+= Sensor Setup
+
+NO quiero que todos los controles de setup estén en index.html.
+
+La navegación debe ser simple y consistente.
+
+Header común:
+
+TCS3448
+SPECTRAL SENSOR
+
+Measurement
+Setup
+
+CONNECTED / DISCONNECTED
+
+La pestaña/página activa debe quedar visualmente marcada.
+
+Ejemplo:
+
+Measurement     Setup
+───────────
+
+o
+
+Measurement     Setup
+                ─────
+
+==================================================
+3. INDEX.HTML — MEASUREMENT
+==================================================
+
+La página principal debe centrarse en:
+
+- conexión
+- adquisición
+- última muestra
+- estado
+
+Todavía NO hay gráfica espectral real.
+
+NO implementar histograma todavía.
+
+Diseño esperado:
+
+HEADER
+--------------------------------
+TCS3448
+SPECTRAL SENSOR
+
+Measurement    Setup            ● CONNECTED
+
+--------------------------------
+
+DEVICE CARD
+
+Device
+TCS3448
+Web Bluetooth
+
+Acquisition Status
+IDLE / RUNNING
+
+[ CONNECT ] [ START ] [ STOP ]
+
+--------------------------------
+
+MEASUREMENT CARD
+
+Spectral Measurement
+
+En esta fase, como todavía no hay gráfico real,
+usar una zona limpia de placeholder o mantener
+la última muestra en formato técnico.
+
+Por ejemplo:
+
+Latest Sample
+
+Sample #63
+
+F1      16
+F2      95
+FZ      730
+F3      730
+F4      812
+F5      308
+FY      1053
+FXL     848
+F6      719
+F7      396
+F8      48
+NIR     46
+
+VIS TL  1282
+VIS BR  17998
+
+No mostrar los 18 valores SMUX repetidos como
+VIS_TL_0, VIS_TL_1, etc. en la vista principal.
+
+Si todavía se necesita esa información de debug,
+crear una sección colapsable:
+
+Advanced / Raw Debug
+
+y dentro sí mostrar los 18 resultados originales.
+
+La vista principal debe usar nombres físicos:
+
+F1
+F2
+FZ
+F3
+F4
+F5
+FY
+FXL
+F6
+F7
+F8
+NIR
+VIS TL
+VIS BR
+
+==================================================
+4. RESUMEN INFERIOR DE LA MUESTRA
+==================================================
+
+Añadir una banda/card inferior compacta con:
+
+Sample
+#63
+
+Gain
+64x
+
+Integration
+50.0 ms
+
+Status
+VALID
+
+Si existe saturación:
+
+Status
+SATURATED
+
+Usar indicadores visuales:
+
+verde:
+VALID
+
+rojo:
+SATURATED / ERROR
+
+gris:
+IDLE
+
+azul:
+MEASURING / RUNNING
+
+==================================================
+5. SETUP.HTML
+==================================================
+
+La página Setup debe contener únicamente la configuración.
+
+Header común:
+
+TCS3448
+SPECTRAL SENSOR
+
+Measurement    Setup            ● CONNECTED
+
+La pestaña Setup debe estar activa.
+
+Contenido:
+
+SENSOR CONFIGURATION
+
+Gain
+[ 64x ▼ ]
+
+Integration Time
+[ 50.0 ms ]
+
+LED Current
+[ 10 mA ]
+
+LED
+[ OFF ]
+
+Auto SMUX
+[ 18 channels ▼ ]
+
+Autozero
+[ Before first measurement ▼ ]
+
+Sample Period
+[ 500 ms ]
+
+[ APPLY CONFIGURATION ]
+
+--------------------------------
+
+ACTIVE CONFIGURATION
+
+Gain             64x
+Integration      50.0 ms
+LED Current      10 mA
+LED              OFF
+Auto SMUX        18 channels
+Autozero         Before first measurement
+Sample Period    500 ms
+ADC Full Scale   18000 counts
+
+● CONFIGURATION VALID
+
+==================================================
+6. PALETA DE COLORES
+==================================================
+
+Crear variables CSS globales.
+
+Paleta recomendada:
+
+--bg-main: #0B1520;
+--bg-header: #08131D;
+--bg-panel: #142333;
+--bg-panel-alt: #10202E;
+
+--border: #2A4052;
+
+--text-primary: #F3F7FA;
+--text-secondary: #A9BCCB;
+--text-muted: #72899A;
+
+--accent: #1597E5;
+--accent-hover: #28A9F5;
+--accent-cyan: #22B8E6;
+
+--success: #36D477;
+--warning: #DDAA3D;
+--danger: #E05B5B;
+
+No es obligatorio usar exactamente estos valores
+si el proyecto ya tiene una paleta mejor,
+pero mantener esta filosofía.
+
+==================================================
+7. FONDO GENERAL
+==================================================
+
+body:
+
+- fondo azul-negro / charcoal
+- no negro puro
+- buen contraste
+- sin degradados agresivos
+
+Ejemplo conceptual:
+
+background: #0B1520;
+
+Las cards deben diferenciarse del fondo:
+
+background: #142333;
+
+==================================================
+8. HEADER
+==================================================
+
+Crear un header técnico y limpio.
+
+Debe contener:
+
+izquierda:
+- pequeño icono opcional
+- TCS3448
+- SPECTRAL SENSOR
+
+centro:
+- Measurement
+- Setup
+
+derecha:
+- estado BLE
+
+Ejemplo:
+
+TCS3448
+SPECTRAL SENSOR
+
+          Measurement    Setup
+
+                         ● CONNECTED
+
+CONNECTED:
+verde
+
+DISCONNECTED:
+gris o rojo suave
+
+No usar un navbar grande de web corporativa.
+
+Debe parecer barra superior de un equipo.
+
+==================================================
+9. CARDS / PANELES
+==================================================
+
+Evitar panel dentro de panel dentro de panel.
+
+Usar una jerarquía simple:
+
+Page
+  Card
+    Content
+
+Cards:
+
+border-radius:
+aprox. 10px - 14px
+
+border:
+1px solid color técnico suave
+
+shadow:
+muy ligera
+
+No sombras dramáticas.
+
+Ejemplo:
+
+background: var(--bg-panel);
+border: 1px solid var(--border);
+
+==================================================
+10. BOTONES
+==================================================
+
+Crear estilos coherentes.
+
+PRIMARY:
+
+START
+APPLY CONFIGURATION
+
+fondo:
+accent blue
+
+texto:
+blanco
+
+hover:
+accent-hover
+
+SECONDARY:
+
+CONNECT
+
+fondo:
+transparente / panel
+
+borde:
+accent
+
+texto:
+accent claro
+
+STOP:
+
+NO usar rojo sólido permanente salvo que tenga sentido.
+
+Preferencia:
+- fondo oscuro
+- borde rojo suave
+- texto rojo
+
+Cuando disabled:
+- baja opacidad
+- cursor disabled
+
+==================================================
+11. ESTADOS
+==================================================
+
+Los estados deben tener indicador visual.
+
+CONNECTED
+● verde
+
+DISCONNECTED
+● gris
+
+RUNNING
+● azul
+
+IDLE
+● gris
+
+VALID
+● verde
+
+SATURATED
+● rojo
+
+ERROR
+● rojo
+
+WARNING
+● ámbar
+
+Usar pequeños badges o dots.
+
+==================================================
+12. FORMULARIOS
+==================================================
+
+Inputs y selects dark mode.
+
+Características:
+
+- fondo más oscuro que card
+- borde técnico
+- texto claro
+- focus azul/cian
+- tamaño consistente
+- labels alineados
+
+Ejemplo:
+
+background: #0E1B28;
+border: 1px solid #355068;
+color: #F3F7FA;
+
+focus:
+border-color: #1597E5;
+
+==================================================
+13. SWITCH LED
+==================================================
+
+Si actualmente se usa checkbox simple:
+
+transformarlo visualmente en toggle switch.
+
+Estados:
+
+OFF:
+gris
+
+ON:
+azul/cian
+
+Mantener el input real para funcionalidad.
+
+No introducir librerías externas solo para esto.
+
+==================================================
+14. TIPOGRAFÍA
+==================================================
+
+Usar preferentemente fuentes del sistema.
+
+Ejemplo:
+
+font-family:
+Inter,
+Roboto,
+"Segoe UI",
+system-ui,
+sans-serif;
+
+No cargar Google Fonts si no hace falta.
+
+Para valores numéricos:
+usar font-variant-numeric: tabular-nums;
+
+Si conviene:
+monospace suave para RAW values.
+
+==================================================
+15. JERARQUÍA DE TEXTO
+==================================================
+
+Títulos principales:
+blanco
+
+Subtítulos:
+gris azulado
+
+Labels:
+secondary
+
+Valores:
+primary
+
+No usar texto blanco puro para todo.
+
+Ejemplo:
+
+.section-title
+14-18px
+font-weight 600
+
+.label
+12-14px
+color secondary
+
+.value
+16-20px
+font-weight 600
+
+==================================================
+16. LAYOUT RESPONSIVE
+==================================================
+
+Desktop first.
+
+Pero debe seguir funcionando razonablemente en:
+- portátil
+- tablet horizontal
+
+Usar:
+- flex
+- grid
+
+Evitar posiciones absolutas salvo detalles.
+
+Setup:
+grid de labels / controls
+
+Measurement:
+cards verticales
+
+==================================================
+17. INDEX — ESTRUCTURA RECOMENDADA
+==================================================
+
+Conceptualmente:
+
+<header>
+    branding
+    nav
+    connection status
+</header>
+
+<main>
+
+    <section class="card device-card">
+        Device
+        connection
+        acquisition status
+        buttons
+    </section>
+
+    <section class="card measurement-card">
+        Latest Sample
+
+        tabla de canales físicos
+    </section>
+
+    <section class="sample-summary">
+        Sample
+        Gain
+        Integration
+        Status
+    </section>
+
+</main>
+
+==================================================
+18. TABLA DE ÚLTIMA MUESTRA
+==================================================
+
+No usar tabla HTML con aspecto clásico si se puede evitar.
+
+Diseño tipo instrument readout.
+
+Ejemplo:
+
+Channel      Counts
+
+F1             16
+F2             95
+FZ            730
+F3            730
+...
+
+Separación sutil.
+
+Valores alineados.
+
+Opcional:
+dos columnas de canales en desktop para reducir altura.
+
+Por ejemplo:
+
+F1   16          F6    719
+F2   95          F7    396
+FZ   730         F8     48
+...
+
+Pero mantener orden lógico.
+
+==================================================
+19. VIS TL / VIS BR
+==================================================
+
+Mostrar:
+
+VIS TL
+VIS BR
+
+No mostrar:
+
+VIS_TL_0
+VIS_TL_1
+VIS_TL_2
+
+en la vista principal.
+
+Si hace falta conservar RAW debug:
+
+Advanced / Raw SMUX Data
+
+colapsable.
+
+==================================================
+20. SETUP — ACTIVE CONFIGURATION
+==================================================
+
+La configuración activa debe parecer READ ONLY.
+
+NO usar inputs disabled.
+
+Usar filas:
+
+Gain                    64x
+Integration             50.0 ms
+LED Current             10 mA
+...
+
+Con divisores suaves.
+
+Al final:
+
+✓ Configuration valid
+
+en verde.
+
+==================================================
+21. NAVEGACIÓN ENTRE PÁGINAS
+==================================================
+
+Measurement:
+index.html
+
+Setup:
+setup.html
+
+El navegador debe mantener la conexión BLE
+si técnicamente es posible con la arquitectura actual.
+
+IMPORTANTE:
+analizar primero cómo está montada la web.
+
+Si cambiar de página rompe inevitablemente la conexión Web Bluetooth,
+NO implementar una separación que destruya la sesión BLE sin analizarlo.
+
+En ese caso:
+preferir una SPA simple con dos vistas internas:
+
+Measurement view
+Setup view
+
+pero manteniendo URLs o navegación lógica si es viable.
+
+PRIORIDAD:
+no romper la conexión BLE.
+
+Antes de separar físicamente index.html y setup.html,
+comprobar comportamiento de Web Bluetooth al navegar.
+
+Si la navegación entre archivos HTML destruye la conexión BLE:
+implementar dos vistas dentro de la misma aplicación:
+- Measurement
+- Setup
+
+y cambiar de vista con Javascript sin recargar la página.
+
+La apariencia debe seguir siendo de dos páginas diferentes.
+
+Documentar la decisión.
+
+==================================================
+22. NO ROMPER EL BLE
+==================================================
+
+Muy importante.
+
+Después del refactor visual deben seguir funcionando:
+
+- CONNECT
+- DISCONNECT
+- START
+- STOP
+- GET_CONFIG
+- APPLY_CONFIG
+- recepción de muestras
+- estado de adquisición
+- estado de conexión
+- reconexión
+
+No cambiar IDs usados por Javascript sin actualizar correctamente el código.
+
+==================================================
+23. NO CAMBIAR EL PROTOCOLO
+==================================================
+
+No modificar:
+- UUIDs
+- payloads
+- JSON
+- comandos
+
+salvo que sea imprescindible.
+
+Este cambio no debe convertirse en un refactor del protocolo.
+
+==================================================
+24. NO IMPLEMENTAR HISTOGRAMA
+==================================================
+
+No implementar todavía:
+
+- Chart.js
+- Canvas chart
+- SVG chart
+- barras espectrales
+- waveform
+- spectral curve
+
+El espacio de Spectral Measurement puede quedar preparado visualmente,
+pero mostrar únicamente la información disponible actualmente.
+
+Este punto se implementará en el siguiente hito.
+
+==================================================
+25. ICONOS
+==================================================
+
+Si ya hay iconos:
+reutilizarlos.
+
+Si no:
+preferir:
+- SVG inline
+- CSS simple
+- caracteres Unicode discretos
+
+No añadir una dependencia grande únicamente por iconos.
+
+Iconos sugeridos:
+
+Device
+chip
+
+Measurement
+bars
+
+Setup
+gear
+
+Connection
+link
+
+Start
+play
+
+Stop
+square
+
+Status
+circle/check
+
+==================================================
+26. CSS
+==================================================
+
+Centralizar estilos.
+
+Preferencia:
+
+web/
+    index.html
+    setup.html
+    styles.css
+    app.js
+
+o estructura equivalente actual.
+
+No duplicar CSS completo entre dos HTML.
+
+Crear un stylesheet común.
+
+Si actualmente todo está inline:
+extraer CSS a fichero común si resulta limpio.
+
+==================================================
+27. JAVASCRIPT
+==================================================
+
+No duplicar lógica BLE entre páginas.
+
+Si se usan dos HTML reales:
+crear JS compartido.
+
+Si se decide SPA:
+mantener un único app.js y dos views.
+
+Prioridad:
+una sola implementación BLE.
+
+==================================================
+28. MANTENER DEBUG RAW
+==================================================
+
+Durante desarrollo necesitamos poder ver el RAW completo.
+
+Añadir una sección discreta:
+
+Advanced Debug
+
+[ Show raw data ]
+
+Al abrir:
+
+- 18 datos SMUX originales
+- mensajes BLE relevantes
+- estado técnico
+
+No mostrarlo por defecto.
+
+La interfaz principal debe permanecer limpia.
+
+==================================================
+29. DOCUMENTACIÓN GLOBAL
+==================================================
+
+Actualizar el archivo global:
+
+ARCHITECTURE.md
+
+Añadir:
+- estructura UI
+- navegación Measurement / Setup
+- decisión SPA vs múltiples HTML
+- interacción entre web y BLE
+- dark mode design system
+- responsabilidades de cada vista
+
+No incluir referencias a "otros proyectos".
+
+==================================================
+30. DOCUMENTACIÓN WEB
+==================================================
+
+En el folder de la parte web crear o actualizar:
+
+README.md
+
+Debe explicar:
+
+- archivos
+- estructura
+- Measurement view
+- Setup view
+- estilos CSS
+- Javascript
+- conexión Web Bluetooth
+- flujo CONNECT
+- START / STOP
+- GET_CONFIG
+- APPLY_CONFIG
+- actualización UI
+- estados
+- debug raw
+- dark mode
+
+==================================================
+31. DOCUMENTACIÓN POR MÓDULO
+==================================================
+
+Mantener actualizado también:
+
+TCS3448Manager/README.md
+BLEWebManager/README.md
+
+solo si este cambio afecta a esos módulos.
+
+No modificar documentación sin necesidad.
+
+==================================================
+32. LIMPIAR ELEMENTOS DE DESARROLLO
+==================================================
+
+Eliminar del UI visible:
+
+- "HITO 4"
+- textos de debug innecesarios
+- explicaciones técnicas largas
+- mensajes internos
+- referencias al desarrollo por etapas
+
+Estos elementos pueden permanecer:
+- Serial
+- Advanced Debug
+- documentación
+
+Pero no en la interfaz principal.
+
+==================================================
+33. ESTADO DE CONEXIÓN
+==================================================
+
+Mostrar de forma clara en header:
+
+● CONNECTED
+
+o:
+
+● DISCONNECTED
+
+Actualizar inmediatamente al:
+- conectar
+- desconectar
+- perder conexión
+
+==================================================
+34. ACCESIBILIDAD BÁSICA
+==================================================
+
+Mantener:
+- contraste suficiente
+- labels asociados a inputs
+- botones con texto
+- focus visible
+- no depender únicamente de color
+
+Ejemplo:
+
+● VALID
+
+no solo círculo verde.
+
+==================================================
+35. CRITERIOS DE CIERRE
+==================================================
+
+Este refactor visual se considera terminado cuando:
+
+1. la UI usa dark mode completo
+2. parece un instrumento científico
+3. Measurement y Setup están claramente separados
+4. no aparece "HITO 4" en la UI
+5. no aparece "otros proyectos"
+6. CONNECT sigue funcionando
+7. DISCONNECT sigue funcionando
+8. START sigue funcionando
+9. STOP sigue funcionando
+10. GET_CONFIG sigue funcionando
+11. APPLY_CONFIG sigue funcionando
+12. muestras siguen llegando
+13. última muestra se visualiza correctamente
+14. configuración activa se visualiza correctamente
+15. los estados son claros
+16. BLE no se rompe al navegar
+17. no se ha añadido todavía ningún histograma
+18. PlatformIO compila
+19. web no tiene errores JS importantes
+20. documentación global actualizada
+21. README de web actualizado
+
+==================================================
+36. PROCEDIMIENTO DE TRABAJO
+==================================================
+
+PASO 1
+Analizar la web actual.
+
+PASO 2
+Analizar si separar físicamente index.html / setup.html rompe Web Bluetooth.
+
+PASO 3
+Decidir:
+- dos páginas reales
+o
+- SPA con dos views
+
+Priorizar mantenimiento de conexión BLE.
+
+PASO 4
+Explicar brevemente la decisión.
+
+PASO 5
+Crear sistema de estilos dark.
+
+PASO 6
+Crear header común.
+
+PASO 7
+Rediseñar Measurement.
+
+PASO 8
+Rediseñar Setup.
+
+PASO 9
+Mover setup fuera de la vista principal.
+
+PASO 10
+Crear Active Configuration limpia.
+
+PASO 11
+Crear Advanced Debug colapsable.
+
+PASO 12
+Probar:
+- CONNECT
+- START
+- STOP
+- APPLY
+- GET_CONFIG
+- sample notifications
+
+PASO 13
+Comprobar responsive.
+
+PASO 14
+Actualizar ARCHITECTURE.md.
+
+PASO 15
+Actualizar README web.
+
+PASO 16
+Compilar PlatformIO.
+
+PASO 17
+Mostrar resumen final:
+- archivos modificados
+- decisión SPA vs multi-page
+- estructura visual
+- funcionalidad preservada
+- cómo probar
+
+==================================================
+37. RESULTADO VISUAL DESEADO
+==================================================
+
+La aplicación debe transmitir:
+
+- precisión
+- instrumento de laboratorio
+- software técnico
+- equipo de medida profesional
+- interfaz moderna
+- sobria
+- clara
+
+No parecer:
+- dashboard empresarial
+- página Bootstrap genérica
+- consola de debug
+- UI gaming
+
+La prioridad es:
+
+funcionalidad existente
++
+dark mode
++
+jerarquía visual
++
+aspecto de instrumental device

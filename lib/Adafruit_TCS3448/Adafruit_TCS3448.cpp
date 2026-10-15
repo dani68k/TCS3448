@@ -72,24 +72,25 @@ bool Adafruit_TCS3448::getDataReady(bool* ready) {
 }
 
 /**
- * @brief Read one coherent 18-result frame without waiting.
+ * @brief Read one coherent 6/12/18-result frame without waiting.
  *
  * @param data Destination for the concurrent gain, saturation, and counts.
+ * @param channelCount Valid results in the selected auto-SMUX mode.
  * @return True when the complete register frame was read successfully.
  */
-bool Adafruit_TCS3448::readData(tcs3448_data_t* data) {
-  if (!i2c_dev || !data || !setBank(false)) {
+bool Adafruit_TCS3448::readData(tcs3448_data_t* data, uint8_t channelCount) {
+  if (!i2c_dev || !data || (channelCount != 6 && channelCount != 12 && channelCount != 18) || !setBank(false)) {
     return false;
   }
 
-  // Reading ASTATUS first latches the 36 following data bytes. BusIO may split
+  // Reading ASTATUS first latches the following channel bytes. BusIO may split
   // the consecutive read to fit Wire's buffer, but uses repeated starts with
   // no intervening stop. This keeps status and every channel concurrent as
   // required by the TCS3448 datasheet section 10.2.7.
   tcs3448_wire_frame_buffer_t raw = {};
   Adafruit_BusIO_Register resultFrame =
       Adafruit_BusIO_Register(i2c_dev, TCS3448_ASTATUS);
-  if (!resultFrame.read(raw.bytes, sizeof(raw.bytes))) {
+  if (!resultFrame.read(raw.bytes, 1 + channelCount * 2)) {
     return false;
   }
 
@@ -100,6 +101,34 @@ bool Adafruit_TCS3448::readData(tcs3448_data_t* data) {
                               ((uint16_t)raw.frame.channels[channel].high << 8);
   }
   return true;
+}
+
+bool Adafruit_TCS3448::readConfiguration(tcs3448_settings_t* settings) {
+  if (!i2c_dev || !settings || !setBank(false)) return false;
+  uint8_t gain, atime, astep[2], smux, az, led;
+  if (!Adafruit_BusIO_Register(i2c_dev, AS7343_CFG1).read(&gain, 1) ||
+      !Adafruit_BusIO_Register(i2c_dev, AS7343_ATIME).read(&atime, 1) ||
+      !Adafruit_BusIO_Register(i2c_dev, AS7343_ASTEP_L).read(astep, 2) ||
+      !Adafruit_BusIO_Register(i2c_dev, AS7343_CFG20).read(&smux, 1) ||
+      !Adafruit_BusIO_Register(i2c_dev, AS7343_AZ_CONFIG).read(&az, 1) ||
+      !Adafruit_BusIO_Register(i2c_dev, AS7343_LED).read(&led, 1)) return false;
+  *settings = {static_cast<uint8_t>(gain & 0x1f), atime,
+      static_cast<uint16_t>(astep[0] | (astep[1] << 8)),
+      static_cast<uint8_t>((smux >> 5) & 3), az,
+      static_cast<uint16_t>(4 + (led & 0x7f) * 2), (led & 0x80) != 0};
+  return true;
+}
+
+bool Adafruit_TCS3448::writeConfiguration(const tcs3448_settings_t& settings) {
+  if (!i2c_dev || !setBank(false)) return false;
+  // The manager stops ALS before changing timing/CFG20; LED is enabled last.
+  return enableLED(false) && setGain(static_cast<tcs3448_gain_t>(settings.gain)) &&
+      // Avoid an intermediate ATIME=ASTEP=0 even while the engine is stopped.
+      (settings.astep == 0 ? (setATIME(settings.atime) && setASTEP(settings.astep)) :
+                             (setASTEP(settings.astep) && setATIME(settings.atime))) &&
+      setSMUXMode(static_cast<tcs3448_smux_mode_t>(settings.smux)) &&
+      setAutoZeroFrequency(settings.autozero) && setLEDCurrent(settings.ledCurrent) &&
+      enableLED(settings.ledEnabled);
 }
 
 /**

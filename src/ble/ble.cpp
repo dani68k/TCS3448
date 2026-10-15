@@ -11,8 +11,13 @@
 #include <freertos/queue.h>
 
 namespace {
-using namespace AtlantesProtocol;
-struct QueuedCommand { Command command; uint32_t session; };
+using namespace TCS3448Protocol;
+struct QueuedCommand {
+  Command command = Command::Invalid;
+  uint32_t session = 0;
+  TCS3448Config config;
+  bool validPayload = true;
+};
 QueueHandle_t commands = nullptr;
 std::atomic<bool> connected{false};
 std::atomic<bool> queueFull{false};
@@ -25,6 +30,7 @@ BLE2902* statusSubscription = nullptr;
 BLE2902* sampleSubscription = nullptr;
 Command lastCommand = Command::None;
 Result lastResult = Result::Ok;
+TCS3448Error commandError = TCS3448Error::None;
 uint16_t responseCounter = 0;
 uint32_t lastStatusMs = 0;
 bool restartAdvertising = false;
@@ -40,7 +46,7 @@ void publishStatus(bool notify) {
   packet[0] = Version;
   packet[1] = status.ready;
   packet[2] = status.acquiring;
-  packet[3] = static_cast<uint8_t>(status.error);
+  packet[3] = static_cast<uint8_t>(commandError != TCS3448Error::None ? commandError : status.error);
   packet[4] = static_cast<uint8_t>(lastCommand);
   packet[5] = static_cast<uint8_t>(lastResult);
   Put16(packet + 6, responseCounter);
@@ -54,19 +60,19 @@ void publishStatus(bool notify) {
 
 void publishConfig() {
   const auto& config = TCS3448Manager::GetConfig();
+  const auto& state = TCS3448Manager::GetStatus();
   uint8_t packet[PacketSize] = {};
-  packet[0] = Version;
+  packet[0] = ConfigVersion;
   packet[1] = static_cast<uint8_t>(config.gain);
-  packet[2] = config.atime;
-  packet[3] = config.ledCurrent;
-  Put16(packet + 4, config.astep);
-  Put16(packet + 6, config.sampleIntervalMs);
-  const uint32_t integrationUs = static_cast<uint32_t>(
-      (config.atime + 1.0f) * (config.astep + 1.0f) * 2.78f + 0.5f);
-  Put32(packet + 8, integrationUs);
-  Put32(packet + 12, config.i2cFrequency);
-  packet[16] = config.sdaPin;
-  packet[17] = config.sclPin;
+  packet[2] = static_cast<uint8_t>(config.smux);
+  packet[3] = static_cast<uint8_t>(config.autozero);
+  packet[4] = config.ledEnabled;
+  packet[5] = state.ready;
+  Put16(packet + 6, config.ledCurrent);
+  Put32(packet + 8, static_cast<uint32_t>(config.integrationMs * 1000.0 + 0.5));
+  Put32(packet + 12, config.sampleIntervalMs);
+  Put16(packet + 16, TCS3448Manager::GetADCFullScale());
+  Put16(packet + 18, state.configRevision);
   configCharacteristic->setValue(packet, sizeof(packet));
 }
 
@@ -86,13 +92,24 @@ class ServerCallbacks : public BLEServerCallbacks {
 
 class CommandCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* characteristic) override {
-    const String text = characteristic->getValue();
-    Command command = Command::Invalid;
-    if (text == "START") command = Command::Start;
-    else if (text == "STOP") command = Command::Stop;
-    else if (text == "GET_STATUS") command = Command::GetStatus;
-    else if (text == "GET_CONFIG") command = Command::GetConfig;
-    QueuedCommand queued{command, session.load()};
+    QueuedCommand queued;
+    queued.session = session.load();
+    const size_t size = characteristic->getLength();
+    const auto* data = characteristic->getData();
+    if (size && data[0] == ApplyTag) {
+      queued.command = Command::ApplyConfig;
+      queued.validPayload = DecodeApply(data, size, queued.config);
+    } else {
+      const String text = characteristic->getValue();
+      if (text == "START") queued.command = Command::Start;
+      else if (text == "STOP") queued.command = Command::Stop;
+      else if (text == "GET_STATUS") queued.command = Command::GetStatus;
+      else if (text == "GET_CONFIG") queued.command = Command::GetConfig;
+      else if (text == "APPLY_CONFIG") {
+        queued.command = Command::ApplyConfig;
+        queued.validPayload = false;
+      }
+    }
     // No sensor access or acquisition work on the Bluetooth task.
     if (xQueueSend(commands, &queued, 0) != pdTRUE) queueFull.store(true);
   }
@@ -100,9 +117,11 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
 ServerCallbacks serverCallbacks;
 CommandCallbacks commandCallbacks;
 
-void execute(Command command) {
+void execute(const QueuedCommand& queued) {
+  const Command command = queued.command;
   lastCommand = command;
   lastResult = Result::Ok;
+  commandError = TCS3448Error::None;
   switch (command) {
     case Command::Start:
       if (!TCS3448Manager::StartAcquisition()) lastResult = Result::SensorError;
@@ -114,8 +133,25 @@ void execute(Command command) {
     case Command::GetStatus:
       break;
     case Command::GetConfig:
+      if (!TCS3448Manager::RefreshConfig()) lastResult = Result::SensorError;
       publishConfig();
       break;
+    case Command::ApplyConfig: {
+      Serial.println("[BLE] APPLY_CONFIG received");
+      auto config = queued.config;
+      const auto& active = TCS3448Manager::GetConfig();
+      config.sdaPin = active.sdaPin;
+      config.sclPin = active.sclPin;
+      config.i2cFrequency = active.i2cFrequency;
+      commandError = queued.validPayload ? TCS3448Manager::ApplyConfig(config) : TCS3448Error::InvalidPayload;
+      if (commandError != TCS3448Error::None) {
+        lastResult = commandError == TCS3448Error::ConfigApplyFailed ? Result::ConfigApplyFailed : Result::InvalidConfig;
+      }
+      fragmentIndex = FragmentCount;
+      publishConfig();  // Configuration snapshot is ready before the application ACK.
+      Serial.printf("[BLE] CONFIG_ACK: %s\n", TCS3448Manager::ErrorName(commandError));
+      break;
+    }
     default:
       lastResult = Result::UnknownCommand;
       break;
@@ -125,7 +161,7 @@ void execute(Command command) {
 }
 }
 
-namespace AtlantesBLE {
+namespace TCS3448BLE {
 bool Init() {
   commands = xQueueCreate(8, sizeof(QueuedCommand));
   if (!commands) return false;
@@ -158,10 +194,12 @@ void Update() {
   const uint32_t currentSession = session.load();
   if (handledSession != currentSession) {
     handledSession = currentSession;
-    TCS3448Manager::StopAcquisition();
+    TCS3448Manager::StopAcquisition(true);
+    publishConfig();
     fragmentIndex = FragmentCount;
     lastCommand = Command::None;
     lastResult = Result::Ok;
+    commandError = TCS3448Error::None;
     queueFull.store(false);
     restartAdvertising = !connected.load();
     disconnectedMs = now;
@@ -176,11 +214,12 @@ void Update() {
     // Leave commands from a newly connected session queued for the next loop.
     if (session.load() != currentSession) return;
     xQueueReceive(commands, &queued, 0);
-    if (connected.load() && queued.session == currentSession) execute(queued.command);
+    if (connected.load() && queued.session == currentSession) execute(queued);
   }
   if (queueFull.exchange(false)) {
     lastCommand = Command::Invalid;
     lastResult = Result::QueueFull;
+    commandError = TCS3448Error::None;
     ++responseCounter;
     publishStatus(true);
   }
@@ -197,7 +236,11 @@ void Update() {
       lastFragmentMs = now - 15;
     }
   }
-  if (previousError != TCS3448Manager::GetStatus().error || now - lastStatusMs >= 1000) publishStatus(true);
+  if (previousError != TCS3448Manager::GetStatus().error) {
+    commandError = TCS3448Error::None;
+    publishConfig();
+    publishStatus(true);
+  } else if (now - lastStatusMs >= 1000) publishStatus(true);
   if (!TCS3448Manager::GetStatus().acquiring) fragmentIndex = FragmentCount;
   if (fragmentIndex < FragmentCount && now - lastFragmentMs >= 15 && connected.load()) {
     if (!sampleSubscription->getNotifications()) {

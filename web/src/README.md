@@ -1,42 +1,67 @@
-# Fuentes de la Web
+﻿# Fuentes de la Web
 
-[Cliente Web](../README.md) · [Aplicación](../../README_APP.md).
+[Cliente Web](../README.md) · [Arquitectura de presentación](../../ARCHITECTURE.md).
 
-| Archivo | Responsabilidad |
+## Estructura
+
+| Archivo | Cometido |
 | --- | --- |
-| `index.template.html` | Estructura HTML con marcadores STYLE y SCRIPT |
-| `style.css` | Estilos de la interfaz |
-| `app.mjs` | Conexión GATT, controles, confirmaciones y presentación |
-| `protocol.mjs` | UUID, códigos, decodificación y `SampleAssembler` |
+| `index.template.html` | Un documento con Measurement y Setup; estado común y Advanced Debug |
+| `style.css` | Variables y componentes dark, grid/flex y focus/contraste |
+| `ui.mjs` | Presentación, rutas hash y readouts; sin acceso Bluetooth |
+| `app.mjs` | Única sesión GATT, comandos y enlaces con la presentación |
+| `protocol.mjs` | Protocolo existente, decodificación y validación; no cambia con el diseño |
 
-`app.mjs` utiliza Web Bluetooth y actualiza el DOM. Evita operaciones de usuario
-simultáneas con `busy` y secuencia las operaciones GATT. Para confirmar una orden
-compara el contador y el código de respuesta del estado, consultándolo hasta
-3,5 s con pausas de 100 ms. GET_CONFIG termina leyendo su característica.
+`ui.mjs` exporta `physicalReadings(sample)` y `createInstrumentUI(elements)`.
+El primero proyecta nombres del protocolo en los 14 canales físicos, usando
+VIS_TL_0/VIS_BR_0 y null para canales no adquiridos. No transforma los counts ni
+promedia ciclos. El segundo renderiza estados, configuración y muestras, y conecta
+Measurement/Setup a `#/measurement`/`#/setup`. La vista inactiva usa hidden y la
+navegación marca aria-current. No desconecta ni envía comandos al cambiar de vista.
 
-`protocol.mjs` valida tamaño y versión y convierte campos little-endian. La
-ganancia se convierte de código a multiplicador. El orden de los 18 canales debe
-coincidir con el driver del firmware.
+## Sesión y configuración
 
-`SampleAssembler` recibe cuatro fragmentos consecutivos de una misma secuencia.
-Un índice 0 inicia/reemplaza la reconstrucción. Descarta conjuntos con secuencia
-distinta, huecos, duplicados intermedios o duración superior a 2 s. Al completar,
-valida también la cabecera de muestra. `app.mjs` filtra secuencias repetidas o
-antiguas y contabiliza omisiones entre muestras aceptadas, considerando el
-desbordamiento uint32. La desconexión limpia la reconstrucción pendiente.
+app conserva el flujo GATT anterior: selección → conexión → características →
+suscripción → GET_STATUS/GET_CONFIG. busy impide órdenes de usuario solapadas y
+las operaciones GATT siguen siendo secuenciales. APPLY espera contador/comando de
+ACK y luego lee CONFIG, sin éxito optimista. Toda la validación definitiva sigue
+en firmware; la presentación no incorpora registros ni conversiones hardware.
 
-Estos archivos son módulos para desarrollar el código; no abrirlos como entrada
-de la aplicación. El generador los convierte en un script clásico integrado en
-`web/dist/index.html`, que sí se abre directamente desde disco.
+El formulario y ACTIVE están separados. Los valores editables no se sustituyen al
+cambiar de vista. ACTIVE usa filas de texto desde una respuesta verificada del
+ESP32. El LED mantiene el checkbox y su valor booleano; cambiar su aspecto a switch
+no altera el payload. El texto ON/OFF sigue la posición solicitada, no afirma que
+ya esté aplicada: el estado aplicado se consulta en ACTIVE.
 
-Desde la raíz:
+## Muestras y estados
+
+SampleAssembler permanece en protocol.mjs. app mantiene la secuencia, las omisiones,
+la reconstrucción de cuatro fragmentos y la limpieza en STOP/APPLY/desconexión.
+La notificación se procesa aunque Measurement esté oculta. ui dibuja nombres
+físicos, mientras `sample` conserva en Advanced Debug el texto SMUX original.
+
+Gain y saturación vienen del frame. Integration se toma de la configuración
+confirmada asociada a la recepción, no de un nuevo campo de protocolo. Durante
+APPLY o configuración desconocida no se atribuye una integración. Tras éxito se
+limpia la muestra previa para no mezclarla con nuevos ajustes.
+
+Badges incluyen texto y color: CONNECTED/VALID verde, RUNNING/MEASURING azul,
+IDLE/DISCONNECTED gris, APPLYING/advertencia ámbar, SATURATED/ERROR rojo. La pérdida
+de conexión actualiza cabecera y limpia valores de esa sesión. Los errores se
+traducen a mensajes orientados al usuario; el código completo se conserva en el
+log acotado de Advanced Debug.
+
+## Compilar la Web y verificar
 
 ```powershell
-node --check web/src/app.mjs
-node --check web/src/protocol.mjs
 node scripts/build-web.mjs
+node scripts/verify-setup.mjs
+node test/web_app.test.mjs
+node test/web_protocol.test.mjs
 ```
 
-Al cambiar el protocolo, mantener sincronizados `src/ble/BLEProtocol.h`,
-`src/ble/ble.cpp`, este decodificador y los formatos documentados. Probar el HTML
-generado tras regenerarlo. No hay pruebas JS activas actualmente en `test/`.
+El generador elimina imports/exports conocidos, integra los tres módulos y CSS
+en `web/dist/index.html` y rechaza dependencias no resueltas. No hay paquetes npm,
+fuentes remotas, segundo documento Setup ni navegación que recargue la aplicación.
+La salida abre directamente desde disco. Las comprobaciones usan DOM/GATT
+simulados; revisar también el navegador real y la continuidad con el ESP32.

@@ -4,16 +4,22 @@
 
 namespace TCS3448Manager {
 bool Init(const TCS3448Config& config = TCS3448Config());
+const TCS3448Config& GetConfig();
+const TCS3448Status& GetStatus();
+uint16_t GetADCFullScale();
+uint32_t GetMinimumPeriodMs();
+bool RefreshConfig();
+TCS3448Error ApplyConfig(const TCS3448Config& config);
+const char* ErrorName(TCS3448Error error);
+bool StartAcquisition();
+// Normal STOP preserves the explicitly configured LED. Disconnect/fault turns it off.
+bool StopAcquisition(bool turnOffLED = false);
+bool Update(TCS3448Sample& sample);
+// Diagnostic compatibility API; not used by the BLE acquisition path.
 bool LEDEnable();
 float GetIntegrationTime();
 uint8_t GetGain();
 bool ReadAllChannels(TCS3448Readings& readings);
-const TCS3448Config& GetConfig();
-const TCS3448Status& GetStatus();
-bool StartAcquisition();
-bool StopAcquisition();
-// Poll from loop(); true only when a complete, new sample is available.
-bool Update(TCS3448Sample& sample);
 void PrintHeader();
 void PrintReadings();
 }

@@ -1,8 +1,16 @@
-Proyecto: ATLANTES
-Entorno: ESP32 + PlatformIO + Arduino framework + VSCode
-Sensor: ams OSRAM TCS3448
-Librería sensor: Adafruit_TCS3448
-Comunicación: BLE + Web Bluetooth
+Proyecto:
+Aplicación de caracterización y control del sensor TCS3448 sobre ESP32.
+
+Entorno:
+- ESP32
+- PlatformIO
+- Arduino framework
+- VSCode
+- Sensor ams OSRAM TCS3448
+- Librería Adafruit_TCS3448
+- Comunicación BLE
+- Interfaz Web mediante Web Bluetooth
+
 Estado actual:
 - TCS3448 funcionando
 - adquisición correcta por ESP32
@@ -12,48 +20,81 @@ Estado actual:
 - visualización actual de los 18 resultados del modo auto-SMUX
 - arquitectura separada entre main.cpp, TCS3448Manager y BLE Web
 
-Objetivo actual:
-Implementar el HITO 4 del proyecto:
-PANEL DE SETUP DEL TCS3448 DESDE LA WEB BLE
+IMPORTANTE:
+A partir de este hito NO debe aparecer ninguna referencia al nombre "nombres de otros proyectos" en:
+- código fuente
+- nombres de clases
+- nombres de variables
+- namespaces
+- nombres de servicios BLE
+- UUID descriptions
+- textos de la web
+- comentarios
+- documentación
+- archivos markdown
+- nombres de comandos/protocolo
+- nombres de módulos
 
-NO quiero todavía:
+Si actualmente existe alguna referencia a "nombres de otros proyectos" dentro del código afectado por este hito, eliminarla o sustituirla por una nomenclatura genérica relacionada con TCS3448, spectral sensor, sensor manager, BLE web, etc.
+
+No hacer una refactorización masiva de código no relacionado, salvo que sea necesario para eliminar referencias directas dentro de los módulos modificados.
+
+==================================================
+HITO 4 — PANEL DE SETUP DEL TCS3448 VÍA BLE WEB
+==================================================
+
+Objetivo:
+Crear un panel de configuración del TCS3448 desde la interfaz Web Bluetooth.
+
+La aplicación ya permite adquirir y visualizar datos a nivel debug.
+
+Este hito debe permitir configurar el sensor desde la web sin recompilar firmware.
+
+NO implementar todavía:
 - gráficas espectrales avanzadas
 - histogramas
+- normalización RAW / ADC % / MAX=100
 - transmitancia
 - absorbancia
 - DARK
 - REFERENCE
 - SAMPLE
+- curvas de calibración
 - auto gain
 - auto exposure
 - CSV
-- curvas de calibración
 - volumetría
+- algoritmos de análisis químico
 
 Este hito se centra exclusivamente en:
-CONFIGURAR EL TCS3448 DESDE LA WEB BLE
-Y CONFIRMAR LA CONFIGURACIÓN REALMENTE APLICADA EN EL ESP32.
+
+1. configuración remota del TCS3448
+2. validación de parámetros
+3. confirmación de configuración realmente aplicada
+4. mantenimiento de la adquisición BLE actual
+5. documentación técnica de la arquitectura
 
 ==================================================
 1. PRINCIPIO DE ARQUITECTURA
 ==================================================
 
-Mantener la separación actual.
+Mantener una arquitectura desacoplada.
 
 La web NO debe conocer directamente:
 - registros internos del TCS3448
 - direcciones I2C
-- Adafruit_TCS3448
-- detalles de SMUX internos
-- mapping de registros
+- detalles de Adafruit_TCS3448
+- registros SMUX
+- mapping interno de ADATA
+- implementación hardware concreta
 
-La arquitectura debe seguir siendo:
+Arquitectura conceptual:
 
 Web Browser
     |
     | Web Bluetooth
     v
-BLE Web Manager / capa BLE
+BLEWebManager
     |
     v
 TCS3448Manager
@@ -64,92 +105,98 @@ Adafruit_TCS3448
     v
 TCS3448
 
-La capa BLE debe pedir cambios al TCS3448Manager.
+La capa BLE debe interactuar exclusivamente con TCS3448Manager o con abstracciones de alto nivel equivalentes.
 
 NO introducir accesos directos desde BLE hacia Adafruit_TCS3448.
 
 ==================================================
-2. REVISAR ANTES DE MODIFICAR
+2. ANALIZAR ANTES DE MODIFICAR
 ==================================================
 
 Antes de escribir código:
 
-1. analiza la estructura actual del proyecto
-2. identifica los archivos existentes relacionados con:
+1. analizar la estructura actual del proyecto
+2. identificar los módulos existentes relacionados con:
    - BLE
    - Web Bluetooth
    - TCS3448Manager
-   - tipos de configuración
+   - TCS3448Types
    - main.cpp
-3. identifica el protocolo BLE actual
-4. identifica cómo se envían actualmente las muestras
-5. identifica si ya existe una característica:
+   - interfaz web
+3. identificar el protocolo BLE actual
+4. identificar cómo se envían las muestras
+5. identificar cómo se representan actualmente:
+   - configuración
+   - muestras
+   - estado
+6. identificar características BLE existentes, por ejemplo:
    - COMMAND
    - STATUS
    - CONFIG
    - SAMPLE
    - NOTIFY
-6. reutiliza la arquitectura existente
+7. reutilizar todo lo que ya funciona
 
-NO reestructurar todo el proyecto sin necesidad.
+NO reescribir el proyecto desde cero.
 
-NO romper la versión debug BLE ya funcional.
+NO romper la versión BLE debug actual.
 
 ==================================================
 3. OBJETIVO FUNCIONAL
 ==================================================
 
-La web debe permitir modificar los principales parámetros del TCS3448 sin recompilar firmware.
-
-Como mínimo:
+La interfaz Web BLE debe permitir configurar como mínimo:
 
 - Gain
-- Integration time
-- LED current
+- Integration Time
+- LED Current
 - LED ON/OFF
 - Auto-SMUX mode
-- Auto-zero configuration
+- Autozero configuration
 - Sample period / acquisition period
 - START acquisition
 - STOP acquisition
 
-Además debe permitir:
+También debe soportar:
 
-- GET CONFIG
-- APPLY CONFIG
-- mostrar configuración activa
-- mostrar errores de validación
-- mostrar confirmación de configuración aplicada
+- GET_CONFIG
+- APPLY_CONFIG
+- lectura de configuración activa
+- ACK de configuración
+- errores de validación
+- estado RUNNING / STOPPED
 
 ==================================================
-4. CONFIGURACIÓN A EXPONER
+4. TCS3448Config
 ==================================================
 
-Usar el modelo TCS3448Config ya existente.
+Usar el modelo TCS3448Config existente.
 
 Si hace falta ampliarlo, hacerlo de forma limpia.
 
-Debe incluir, como mínimo:
+Debe representar como mínimo:
 
 - gain
 - integration time
 - LED current
 - LED enabled
-- auto_smux_mode
-- autozero setting
+- auto_smux mode
+- autozero configuration
 - sample period
 
-No duplicar datos innecesariamente.
+Evitar duplicación de estado.
 
-Si la configuración actual del Manager ya tiene campos equivalentes, reutilizarlos.
+TCS3448Manager debe ser la fuente principal de verdad de la configuración del sensor.
+
+Si sample period pertenece más a la capa de adquisición que al sensor físico, documentar esta diferencia claramente.
 
 ==================================================
 5. GAIN
 ==================================================
 
-La web debe permitir seleccionar todas las ganancias soportadas por el TCS3448.
+La web debe permitir seleccionar únicamente ganancias válidas.
 
-Valores válidos:
+Valores soportados:
 
 0.5x
 1x
@@ -165,8 +212,6 @@ Valores válidos:
 1024x
 2048x
 
-No usar un campo numérico libre para gain.
-
 Usar un selector desplegable.
 
 Ejemplo:
@@ -174,78 +219,75 @@ Ejemplo:
 Gain
 [ 64x ▼ ]
 
-La web debe enviar un valor que pueda convertirse de forma segura a la representación interna del firmware.
+NO usar entrada numérica libre.
 
-No acoplar el HTML directamente a enums de Adafruit.
+La representación enviada por BLE debe ser estable y desacoplada de enums internos de Adafruit.
 
-Crear si hace falta una representación propia estable.
+Si es necesario, crear un enum propio.
 
 ==================================================
 6. INTEGRATION TIME
 ==================================================
 
-La interfaz debe permitir modificar el tiempo de integración.
-
-La librería o el TCS3448Manager puede internamente usar:
-- ATIME
-- ASTEP
-- o una función basada en milisegundos
-
-La web no debe conocer ATIME/ASTEP.
-
-La web debe trabajar preferentemente con:
-
-integration_time_ms
+La web debe trabajar con tiempo de integración expresado en milisegundos.
 
 Ejemplo:
 
-Integration time
+Integration Time
 [ 50.0 ] ms
 
-El Manager debe realizar la conversión necesaria.
+La web NO debe conocer:
 
-Si actualmente la librería no permite pasar milisegundos directamente, encapsular la conversión en TCS3448Manager.
+ATIME
+ASTEP
 
-No implementar esta conversión en Javascript.
+La conversión debe realizarse en firmware dentro de TCS3448Manager o una capa equivalente.
 
-IMPORTANTE:
-el valor mostrado como "Integration Time" debe corresponder al tiempo realmente aplicado, no simplemente al solicitado.
+Según el TCS3448:
+
+t_int =
+(ATIME + 1) *
+(ASTEP + 1) *
+2.78 us
+
+La configuración activa debe devolver el tiempo REAL aplicado.
+
+No simplemente el valor solicitado.
 
 ==================================================
 7. ADC FULL SCALE
 ==================================================
 
-Añadir al firmware o a la capa de configuración el cálculo del ADC full scale.
-
-Según el TCS3448:
+Calcular y exponer como dato READ ONLY:
 
 ADC_full_scale =
-(ATIME + 1) * (ASTEP + 1)
+(ATIME + 1) *
+(ASTEP + 1)
 
-limitado a 65535.
+limitado a:
 
-Exponer este valor a la web en modo READ ONLY.
+65535
 
-Ejemplo:
+Mostrar en la web:
 
 ADC Full Scale
-[ 18000 counts ]
+[ xxxxx counts ]
 
-No debe ser editable.
+Este valor no debe ser editable.
 
-Esto será utilizado más adelante para calcular ADC %.
+Será usado en hitos posteriores para normalización ADC %.
 
 ==================================================
 8. LED CURRENT
 ==================================================
 
-Permitir modificar la corriente del LED integrado.
+Permitir configurar el driver LED interno.
 
 Rango válido:
 
-4 mA a 258 mA
+4 mA ... 258 mA
 
-Pasos:
+Paso:
 
 2 mA
 
@@ -254,117 +296,123 @@ Ejemplo:
 LED Current
 [ 20 ] mA
 
-Validar:
-- mínimo 4
-- máximo 258
-- múltiplo válido de 2 mA a partir de 4 mA
+Validación firmware:
 
-Si llega un valor inválido:
-- rechazarlo
-- no aplicar parcialmente la configuración
-- enviar un error claro a la web
+- mínimo 4 mA
+- máximo 258 mA
+- incremento válido de 2 mA
 
-En el caso concreto de trabajar con el kit de Adafruit_TCS3448 limitar la corriente a 150mA.
+Ejemplos válidos:
+
+4
+6
+8
+10
+...
+258
+
+Ejemplos inválidos:
+
+3
+5
+21
+260
+
+Si el valor es inválido:
+- rechazar configuración
+- devolver error
+- no aplicar cambios parciales
 
 ==================================================
 9. LED ON / OFF
 ==================================================
 
-Añadir control:
+Añadir control explícito:
 
 LED
 [ ON / OFF ]
 
-La web debe poder consultar el estado actual.
-
-La confirmación de configuración debe reflejar el estado realmente aplicado.
+La web debe poder:
+- leer estado actual
+- modificarlo
+- recibir confirmación del estado realmente aplicado
 
 ==================================================
 10. AUTO-SMUX
 ==================================================
 
-Permitir seleccionar el modo auto-SMUX.
-
-Como mínimo:
+Permitir seleccionar:
 
 6 channels
 12 channels
 18 channels
 
-Para ATLANTES el modo preferido actualmente es 18 channels.
-
-La interfaz puede ser:
+Ejemplo:
 
 Auto SMUX
 [ 18 channels ▼ ]
 
-No exponer directamente valores de bits del registro CFG20.
+No exponer bits de CFG20 en Javascript.
 
-La web debe trabajar con conceptos legibles.
+La web trabaja con conceptos de alto nivel.
+
+TCS3448Manager realiza el mapping interno.
 
 ==================================================
 11. AUTOZERO
 ==================================================
 
-Exponer la configuración de autozero en una forma comprensible.
+Exponer el autozero de forma comprensible.
 
-Si actualmente el Manager maneja:
-
-AZ_NTH_ITERATION
-
-no quiero que la web muestre directamente un byte sin explicación.
-
-Quiero opciones como:
+Opciones deseadas:
 
 - Before first measurement
 - Every measurement
+- Disabled
+
+Opcionalmente, si la arquitectura actual ya lo soporta:
+
 - Every N measurements
-- Disabled
 
-Si "Every N" resulta demasiado complejo para este hito, se puede limitar inicialmente a:
+No mostrar directamente AZ_NTH_ITERATION como valor técnico sin interpretación.
 
-- Before first measurement
-- Every measurement
-- Disabled
-
-Pero dejar la arquitectura preparada para un valor N en el futuro.
-
-No inventar comportamiento que el TCS3448 no soporte.
+No inventar modos no soportados por el sensor.
 
 ==================================================
 12. SAMPLE PERIOD
 ==================================================
 
-Añadir periodo de adquisición configurable.
+Añadir periodo de adquisición.
 
 Ejemplo:
 
-Sample period
+Sample Period
 [ 500 ] ms
 
-Este parámetro NO pertenece necesariamente al TCS3448 físico.
+Este parámetro pertenece a la lógica de adquisición, no necesariamente al sensor físico.
 
-Puede formar parte de la configuración del sistema / acquisition manager.
+Validar:
 
-Debe existir una validación importante:
+sample_period_ms > 0
 
-sample_period_ms >= tiempo requerido por una adquisición completa
+y además:
 
-Especialmente en modo auto-SMUX 18, puede haber múltiples ciclos internos.
+sample_period_ms >= tiempo mínimo necesario para completar la adquisición
 
-Si el periodo solicitado es demasiado corto:
-- rechazarlo
-o
-- ajustarlo automáticamente
+Especialmente importante en modo auto-SMUX de 18 canales.
 
 Preferencia:
-rechazarlo y devolver un error comprensible.
+si el periodo es demasiado corto, rechazarlo y devolver un error explícito.
+
+Ejemplo:
+
+SAMPLE_PERIOD_TOO_SHORT
 
 ==================================================
 13. START / STOP
 ==================================================
 
-Mantener o mejorar los controles:
+Mantener controles:
 
 [ START ]
 [ STOP ]
@@ -373,30 +421,19 @@ START:
 - activa adquisición periódica
 
 STOP:
-- detiene adquisición periódica
+- detiene adquisición
 
-Cambiar configuración debería funcionar preferentemente con adquisición detenida.
+El estado mostrado en la web debe provenir del ESP32.
 
-Evaluar si el Manager puede aplicar ciertos cambios en marcha de forma segura.
-
-Si no:
-- detener adquisición
-- aplicar configuración
-- reanudar si estaba activa
-
-Pero encapsular este comportamiento.
+No asumirlo únicamente por el botón pulsado.
 
 ==================================================
-14. GET CONFIG
+14. GET_CONFIG
 ==================================================
 
-Implementar un mecanismo para que la web pueda solicitar la configuración actual.
+Implementar un mecanismo BLE para solicitar la configuración real.
 
-La respuesta debe representar la configuración REAL del firmware.
-
-No usar únicamente variables Javascript locales.
-
-Ejemplo conceptual:
+Respuesta conceptual:
 
 {
   "gain": 64,
@@ -406,94 +443,84 @@ Ejemplo conceptual:
   "auto_smux": 18,
   "autozero": "first",
   "sample_period_ms": 500,
-  "adc_full_scale": 18000
+  "adc_full_scale": 18000,
+  "running": true
 }
 
-El formato exacto puede adaptarse a la arquitectura BLE existente.
+El formato exacto puede adaptarse al protocolo existente.
+
+El firmware es la fuente de verdad.
 
 ==================================================
-15. SET CONFIG / APPLY
+15. APPLY_CONFIG
 ==================================================
 
-La web tendrá un botón:
+La web debe tener:
 
 [ APPLY ]
 
-Funcionamiento:
+Flujo:
 
 1. usuario modifica parámetros
-2. Javascript crea mensaje de configuración
-3. envía configuración por BLE
-4. ESP32 valida TODOS los parámetros
-5. si todo es válido:
-   - aplica la configuración
-6. ESP32 devuelve configuración activa
-7. web actualiza valores
-8. mostrar confirmación
+2. web valida superficialmente
+3. web envía configuración
+4. ESP32 valida TODOS los campos
+5. si todo es correcto:
+   - aplica configuración
+6. ESP32 devuelve ACK
+7. ACK contiene configuración realmente aplicada
+8. web actualiza ACTIVE CONFIGURATION
 
-Ejemplo:
-
-Configuration applied successfully
-
-No asumir éxito antes de recibir ACK del ESP32.
+No mostrar éxito antes de recibir confirmación.
 
 ==================================================
-16. APLICACIÓN ATÓMICA DE CONFIGURACIÓN
+16. CONFIGURACIÓN ATÓMICA
 ==================================================
 
-Quiero evitar configuraciones parciales.
+Evitar configuraciones parciales.
 
 Ejemplo:
 
 gain = válido
 integration = válido
-led current = inválido
+LED current = inválido
 
-NO quiero:
+Resultado esperado:
 
-gain aplicado
-integration aplicado
+NINGÚN cambio aplicado.
+
+No quiero:
+
+gain cambiado
+integration cambiado
 LED rechazado
 
-Quiero:
+Primero validar todo.
 
-- validar primero todo
-- aplicar después todo
+Después aplicar todo.
 
-Si algo falla:
-- mantener configuración anterior
-- devolver error
-
-Si no es viable hacer rollback exacto, diseñar la secuencia para minimizar estados parciales y documentarlo.
+Si un rollback completo no es trivial:
+- minimizar estados parciales
+- documentar la estrategia
+- priorizar coherencia
 
 ==================================================
-17. RESPUESTAS / ACK
+17. ACK Y ERRORES
 ==================================================
 
-Quiero protocolo claro de respuesta.
+Implementar respuestas claras.
 
-Ejemplos conceptuales:
-
-OK CONFIG
-ERR INVALID_GAIN
-ERR INVALID_LED_CURRENT
-ERR INVALID_INTEGRATION
-ERR SAMPLE_PERIOD_TOO_SHORT
-
-O equivalente en JSON.
-
-Preferencia:
-si actualmente el BLE Web usa JSON, seguir con JSON.
-
-Ejemplo:
+Ejemplo de éxito:
 
 {
   "type": "config_ack",
   "ok": true,
-  "config": {...}
+  "config": {
+      ...
+  }
 }
 
-Error:
+Ejemplo de error:
 
 {
   "type": "config_ack",
@@ -501,36 +528,51 @@ Error:
   "error": "INVALID_LED_CURRENT"
 }
 
+Errores posibles:
+
+INVALID_GAIN
+INVALID_INTEGRATION
+INVALID_LED_CURRENT
+INVALID_SMUX_MODE
+INVALID_AUTOZERO
+INVALID_SAMPLE_PERIOD
+SAMPLE_PERIOD_TOO_SHORT
+CONFIG_APPLY_FAILED
+
+Reutilizar el sistema actual si ya existe algo equivalente.
+
 ==================================================
-18. FORMATO DE PROTOCOLO BLE
+18. PROTOCOLO BLE
 ==================================================
 
 Reutilizar el protocolo actual.
 
-NO cambiar a binario en este hito salvo que ya esté implementado.
+No cambiar a binario en este hito salvo que ya exista.
 
-Durante desarrollo prefiero:
+Durante desarrollo se prioriza:
+
 - legibilidad
-- facilidad de debug
+- facilidad de depuración
 - trazabilidad
 
-Si se usa JSON:
-- mantener claves cortas pero claras
-- evitar mensajes gigantes
-- comprobar MTU BLE
-- si hace falta fragmentación, reutilizar la ya existente
+Si actualmente se usa JSON, mantener JSON.
 
-No introducir un sistema complejo si no hace falta.
+Comprobar:
+- tamaño de mensajes
+- MTU BLE
+- fragmentación si ya existe
+
+No crear una capa compleja de fragmentación nueva si no es necesaria.
 
 ==================================================
 19. INTERFAZ WEB
 ==================================================
 
-Crear una sección clara:
+Crear un bloque claro:
 
 TCS3448 SETUP
 
-Con una presentación similar a:
+Ejemplo:
 
 --------------------------------
 
@@ -574,106 +616,104 @@ ADC Full Scale:   18000 counts
 
 --------------------------------
 
-Status:
+Connection:
 Connected
-Acquisition: Running
-Configuration: OK
+
+Acquisition:
+Running
+
+Configuration:
+OK
 
 ==================================================
-20. NO MEZCLAR REQUESTED CONFIG Y ACTIVE CONFIG
+20. REQUESTED CONFIG VS ACTIVE CONFIG
 ==================================================
 
-Muy importante.
+Separar claramente:
 
-En la web debe quedar clara la diferencia entre:
+REQUESTED CONFIG
+= formulario editable
 
-CONFIGURACIÓN EDITABLE
-= lo que el usuario quiere aplicar
+ACTIVE CONFIG
+= estado confirmado por el ESP32
 
-CONFIGURACIÓN ACTIVA
-= lo que el ESP32 confirma que está utilizando
+No mezclar ambos.
 
-No mostrar simplemente los mismos valores en ambos bloques.
-
-El bloque ACTIVE CONFIGURATION debe provenir de una respuesta del ESP32.
+ACTIVE CONFIG debe proceder siempre de una respuesta del firmware.
 
 ==================================================
 21. VALIDACIONES
 ==================================================
 
-Implementar validaciones tanto en Javascript como en firmware.
+Implementar validación en dos niveles.
 
 Javascript:
-- mejorar UX
-- evitar enviar valores obviamente incorrectos
+- mejorar experiencia
+- impedir errores evidentes
 
 Firmware:
 - validación definitiva
-- nunca confiar en Javascript
+- nunca confiar en la web
 
 Validaciones mínimas:
 
-gain:
-solo valores soportados
+Gain:
+solo valores válidos
 
-integration time:
+Integration:
 > 0
-dentro de rango soportado
+y dentro del rango soportado
 
 LED current:
-4..258 mA
-pasos válidos de 2 mA
+4..258
+pasos de 2 mA
 
-auto-SMUX:
-solo 6 / 12 / 18
+Auto-SMUX:
+6 / 12 / 18
 
-sample period:
-> 0
->= tiempo mínimo de adquisición
-
-autozero:
+Autozero:
 solo modos soportados
 
+Sample period:
+> 0
+y suficientemente largo para completar adquisición
+
 ==================================================
-22. CONFIGURACIÓN POR DEFECTO
+22. FUENTE DE VERDAD
 ==================================================
 
-No duplicar defaults en Javascript y firmware si puede evitarse.
+No duplicar valores por defecto entre Javascript y firmware si puede evitarse.
 
-El firmware debe ser la fuente de verdad.
+Al conectar:
 
-Al conectar BLE:
-
-1. conectar
-2. GET_CONFIG
-3. rellenar formulario con valores activos
-
-Así la web siempre refleja el ESP32.
+1. Web conecta BLE
+2. Web solicita GET_CONFIG
+3. ESP32 responde
+4. Web rellena formulario
+5. Web rellena ACTIVE CONFIG
 
 ==================================================
 23. RECONEXIÓN
 ==================================================
 
-Si BLE se desconecta y vuelve a conectar:
+Después de una desconexión:
 
 - no asumir configuración anterior
-- solicitar GET_CONFIG de nuevo
-- refrescar UI
-- refrescar estado RUNNING/STOPPED
+- volver a ejecutar GET_CONFIG
+- actualizar RUNNING / STOPPED
+- actualizar configuración activa
 
 ==================================================
 24. ESTADO DE ADQUISICIÓN
 ==================================================
 
-La web debe mostrar:
+Mostrar:
 
 Acquisition:
 RUNNING
 STOPPED
 
-El estado debe provenir del ESP32.
-
-No únicamente del último botón pulsado.
+Este estado debe venir del firmware.
 
 ==================================================
 25. MAIN.CPP
@@ -681,29 +721,22 @@ No únicamente del último botón pulsado.
 
 Mantener main.cpp pequeño.
 
-No meter parsing BLE extenso en main.cpp.
+No meter:
 
-No meter validaciones de configuración específicas del sensor en main.cpp.
+- parsing BLE complejo
+- validaciones específicas del TCS3448
+- acceso a registros
+- lógica de configuración del sensor
 
-Idealmente main.cpp debe seguir siendo coordinador.
-
-Ejemplo conceptual:
-
-void loop()
-{
-    bleManager.update();
-    sensorManager.update();
-}
-
-o equivalente según arquitectura actual.
+main.cpp debe actuar como coordinador.
 
 ==================================================
-26. ESTRUCTURA DE MÓDULOS
+26. ORGANIZACIÓN DEL PROYECTO
 ==================================================
 
-Mantener el módulo del sensor separado.
+Mantener la estructura existente.
 
-Estructura conceptual:
+Conceptualmente:
 
 src/
     main.cpp
@@ -712,22 +745,24 @@ TCS3448Manager/
     TCS3448Manager.cpp
     TCS3448Manager.h
     TCS3448Types.h
+    README.md
 
 BLEWebManager/
     BLEWebManager.cpp
     BLEWebManager.h
+    README.md
 
-No mover archivos existentes sin necesidad.
+Si la estructura real difiere, respetarla.
 
-Si el proyecto ya usa otra estructura equivalente, respetarla.
+No mover archivos sin necesidad.
 
 ==================================================
 27. TCS3448Types
 ==================================================
 
-Si hace falta, ampliar TCS3448Types.h con enums claros.
+Si es necesario, crear o ampliar enums propios.
 
-Ejemplos conceptuales:
+Ejemplo conceptual:
 
 enum class TCS3448SmuxMode {
     Channels6,
@@ -741,31 +776,33 @@ enum class TCS3448AutoZeroMode {
     EveryMeasurement
 };
 
-No usar obligatoriamente estos nombres.
+Los nombres exactos pueden adaptarse.
 
-Evaluar el código existente.
+Evitar exponer enums de Adafruit fuera del módulo del sensor.
 
 ==================================================
 28. NO ROMPER LA ADQUISICIÓN ACTUAL
 ==================================================
 
-La visualización debug actual de los 18 valores debe seguir funcionando.
+La visualización BLE debug de las muestras debe seguir funcionando.
 
-Después del Hito 4 quiero poder:
+Debe poder comprobarse:
 
-1. cambiar Gain
+1. cambiar gain
 2. pulsar APPLY
-3. observar inmediatamente el efecto en las lecturas
+3. observar modificación de counts
 
-Lo mismo con:
+También con:
+
 - integration time
 - LED current
+- LED ON/OFF
 
 ==================================================
 29. DEBUG POR SERIAL
 ==================================================
 
-Mantener logs útiles durante desarrollo.
+Mantener logs útiles.
 
 Ejemplo:
 
@@ -773,162 +810,332 @@ Ejemplo:
 [TCS3448] validating configuration
 [TCS3448] gain = 64x
 [TCS3448] integration = 50.0 ms
-[TCS3448] LED = 20 mA
-[TCS3448] SMUX = 18
+[TCS3448] LED current = 20 mA
+[TCS3448] SMUX = 18 channels
 [TCS3448] configuration applied
 [BLE] CONFIG_ACK sent
 
-Errores:
+Error:
 
 [TCS3448] invalid LED current: 21 mA
 
-No inundar Serial con logs innecesarios.
+Evitar logs excesivos en cada loop.
 
 ==================================================
-30. CRITERIO DE CIERRE DEL HITO
+30. DOCUMENTACIÓN GLOBAL OBLIGATORIA
 ==================================================
 
-El Hito 4 se considera terminado cuando se cumple:
+Crear o actualizar un archivo Markdown global en la raíz del proyecto.
+
+Nombre recomendado:
+
+ARCHITECTURE.md
+
+o, si ya existe un README principal adecuado, ampliar ese archivo.
+
+Este documento debe explicar:
+
+1. objetivo general de la aplicación
+2. arquitectura firmware + BLE + web
+3. responsabilidades de cada módulo
+4. flujo completo de configuración
+5. flujo completo de adquisición
+6. protocolo BLE
+7. mensajes principales
+8. configuración del sensor
+9. estructura de TCS3448Config
+10. estructura de TCS3448Sample
+11. relación entre TCS3448Manager y BLEWebManager
+12. START / STOP
+13. GET_CONFIG / APPLY_CONFIG
+14. ACK y errores
+15. flujo de conexión/reconexión
+16. estructura general de carpetas
+17. diagrama textual de arquitectura
+
+Ejemplo:
+
+Web Browser
+    |
+    v
+BLEWebManager
+    |
+    v
+TCS3448Manager
+    |
+    v
+Adafruit_TCS3448
+    |
+    v
+TCS3448
+
+Este documento debe mantenerse actualizado en futuros hitos.
+
+NO incluir ninguna referencia a "nombres de otros proyectos".
+
+==================================================
+31. DOCUMENTACIÓN POR MÓDULO
+==================================================
+
+Cada folder de código fuente relevante debe contener su propio README.md.
+
+Por ejemplo:
+
+TCS3448Manager/README.md
+
+Debe explicar:
+
+- objetivo del módulo
+- archivos
+- clases
+- structs
+- enums
+- API pública
+- inicialización
+- configuración
+- adquisición
+- mapping de canales
+- manejo de errores
+- saturación
+- dependencias
+- relación con otros módulos
+
+BLEWebManager/README.md
+
+Debe explicar:
+
+- objetivo
+- arquitectura BLE
+- servicios
+- características
+- comandos
+- JSON utilizado
+- notificaciones
+- START / STOP
+- GET_CONFIG
+- APPLY_CONFIG
+- ACK
+- errores
+- reconexión
+- interacción con TCS3448Manager
+
+Si existen otros folders dentro de src/ o equivalentes con código propio:
+crear o actualizar también su README.md.
+
+NO crear documentación redundante.
+
+La documentación de módulo debe centrarse en los detalles internos del módulo.
+
+La documentación global debe centrarse en cómo encajan todos los módulos entre sí.
+
+==================================================
+32. ACTUALIZAR DOCUMENTACIÓN, NO DUPLICAR
+==================================================
+
+En futuros cambios:
+
+- actualizar los README.md existentes
+- actualizar ARCHITECTURE.md
+- evitar crear README2.md, NOTES.md, etc. sin necesidad
+- mantener la documentación alineada con el código real
+
+Si una API cambia:
+actualizar documentación en el mismo cambio.
+
+==================================================
+33. COMENTARIOS EN CÓDIGO
+==================================================
+
+No intentar sustituir documentación Markdown por comentarios excesivos.
+
+En código:
+- comentarios breves
+- explicar decisiones no evidentes
+- documentar accesos directos a registros
+- indicar direcciones de registro cuando corresponda
+
+En Markdown:
+- explicar arquitectura y funcionamiento
+
+==================================================
+34. CRITERIO DE CIERRE DEL HITO
+==================================================
+
+El Hito 4 se considera terminado cuando:
 
 1. navegador conecta correctamente por BLE
-2. web solicita configuración actual
-3. web muestra configuración activa
+2. web solicita configuración real
+3. web muestra ACTIVE CONFIG
 4. usuario puede modificar:
    - gain
    - integration
    - LED current
-   - LED on/off
+   - LED ON/OFF
    - auto-SMUX
    - autozero
    - sample period
-5. usuario pulsa APPLY
-6. firmware valida
-7. firmware aplica
+5. APPLY envía configuración
+6. firmware valida toda la configuración
+7. firmware aplica configuración
 8. firmware devuelve ACK
 9. web muestra configuración realmente aplicada
-10. la adquisición sigue funcionando
-11. los nuevos valores afectan realmente a las lecturas
-12. errores de configuración aparecen correctamente en la web
-13. reconexión BLE vuelve a leer configuración real
-14. PlatformIO compila sin errores
+10. errores se muestran correctamente
+11. START funciona
+12. STOP funciona
+13. reconexión recupera estado real
+14. adquisición debug anterior sigue funcionando
+15. PlatformIO compila correctamente
+16. no hay warnings relevantes nuevos
+17. ARCHITECTURE.md está actualizado
+18. cada módulo relevante tiene README.md actualizado
+19. no existe ninguna referencia a "nombres de otros proyectos" en el código o documentación modificada
 
 ==================================================
-31. PROCEDIMIENTO DE TRABAJO
+35. PROCEDIMIENTO DE TRABAJO
 ==================================================
 
 Trabajar en este orden:
 
 PASO 1
-Analiza el proyecto actual completo.
+Analizar el proyecto actual.
 
 PASO 2
-Indícame brevemente:
-- arquitectura actual
-- archivos que vas a modificar
-- archivos nuevos si hacen falta
-- protocolo BLE actual que vas a reutilizar
+Mostrar brevemente:
+- arquitectura detectada
+- archivos a modificar
+- archivos nuevos
+- protocolo BLE actual
+- documentación existente
 
 PASO 3
-Implementa/amplía TCS3448Config si es necesario.
+Revisar TCS3448Config.
 
 PASO 4
-Implementa validación de configuración en TCS3448Manager.
+Implementar o ampliar validación.
 
 PASO 5
-Implementa GET_CONFIG.
+Implementar GET_CONFIG.
 
 PASO 6
-Implementa SET_CONFIG / APPLY.
+Implementar APPLY_CONFIG.
 
 PASO 7
-Implementa ACK y manejo de errores.
+Implementar ACK y errores.
 
 PASO 8
-Añade los controles a la web.
+Añadir controles a la web.
 
 PASO 9
-Añade ACTIVE CONFIGURATION.
+Añadir ACTIVE CONFIG.
 
 PASO 10
-Prueba START / STOP.
+Comprobar START / STOP.
 
 PASO 11
-Compila con PlatformIO.
+Comprobar reconexión.
 
 PASO 12
-Corrige errores y warnings relevantes.
+Actualizar ARCHITECTURE.md.
 
 PASO 13
-Revisa que la adquisición BLE debug anterior siga funcionando.
+Crear/actualizar README.md de cada módulo.
 
 PASO 14
-Muéstrame un resumen final:
+Buscar referencias a "nombres de otros proyectos" en los archivos afectados y eliminarlas.
+
+PASO 15
+Compilar con PlatformIO.
+
+PASO 16
+Corregir errores.
+
+PASO 17
+Revisar warnings relevantes.
+
+PASO 18
+Comprobar que la adquisición anterior sigue funcionando.
+
+PASO 19
+Mostrar resumen final con:
 - archivos modificados
-- protocolo añadido
+- funciones añadidas
+- protocolo añadido/cambiado
 - validaciones
-- cómo probar el Hito 4
+- documentación creada/actualizada
+- instrucciones de prueba
 
 ==================================================
-32. IMPORTANTE: INSPECCIONAR API REAL
+36. INSPECCIONAR API REAL
 ==================================================
 
 No asumir métodos inexistentes en Adafruit_TCS3448.
 
 Antes de implementar:
+
 - inspeccionar headers
 - inspeccionar implementación
-- verificar setters/getters disponibles
-- comprobar mapping de gain
-- comprobar integración
+- comprobar setters/getters
+- comprobar gain
+- comprobar integration
 - comprobar LED
 - comprobar SMUX
 - comprobar autozero
 
-Si una función no está disponible:
-- no inventar API
-- encapsular acceso a registros en TCS3448Manager si hace falta
-- documentar ese acceso
+Si algo no está soportado directamente:
+
+- no inventar funciones
+- encapsular acceso a registros en TCS3448Manager
+- documentarlo en código y README
 
 ==================================================
-33. NO EXPANDIR A HITO 5
+37. NO IMPLEMENTAR EL HITO 5
 ==================================================
 
 NO implementar todavía:
 
-- gráfico de barras
-- gráfico espectral
-- RAW / ADC % / MAX=100
-- visualización por longitud de onda
+- barras
+- gráfica espectral
+- ordenación visual por longitud de onda
+- ADC %
+- MAX=100
 - normalización
 - transmitancia
 - absorbancia
 
-Eso será el HITO 5.
-
-El objetivo de este Hito 4 es dejar una capa de configuración remota BLE sólida, validada y trazable.
+Eso pertenece al siguiente hito.
 
 ==================================================
-34. RESULTADO FINAL ESPERADO
+38. RESULTADO FINAL ESPERADO
 ==================================================
 
-Al terminar quiero poder:
+Al finalizar quiero poder:
 
 1. abrir la web
-2. conectar al ESP32
-3. ver configuración actual
-4. cambiar gain de 64x a 128x
-5. cambiar integration de 50 ms a 100 ms
-6. cambiar LED de 20 mA a 30 mA
-7. pulsar APPLY
-8. recibir confirmación
-9. ver ACTIVE CONFIGURATION actualizada
-10. observar cambio real en los counts recibidos
-11. poder repetir cambios sin reiniciar el ESP32
+2. conectar por BLE
+3. leer configuración actual del ESP32
+4. cambiar gain
+5. cambiar integration time
+6. cambiar LED current
+7. cambiar LED ON/OFF
+8. cambiar auto-SMUX
+9. cambiar autozero
+10. cambiar sample period
+11. pulsar APPLY
+12. recibir ACK
+13. ver la configuración realmente aplicada
+14. observar el cambio real en las muestras
+15. desconectar
+16. reconectar
+17. recuperar configuración y estado reales
+18. consultar documentación global y por módulo
 
 Priorizar:
+
 - simplicidad
 - robustez
+- modularidad
 - trazabilidad
-- no romper lo que ya funciona
-- evitar lógica duplicada
-- mantener TCS3448Manager como fuente de verdad del sensor
+- documentación
+- no romper funcionalidad existente
+- no introducir dependencias innecesarias
+- no incluir ninguna referencia a "nombres de otros proyectos"

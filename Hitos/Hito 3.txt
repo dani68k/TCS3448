@@ -3,7 +3,7 @@ Objetivo:
 Crear una comunicación BLE estable entre el ESP32 y un navegador compatible
 para consultar el estado del sensor, iniciar/parar adquisición y recibir muestras.
 El alcance debería incluir:
-- servicio BLE propio para ATLANTES/TCS3448
+- servicio BLE propio para TCS3448
 - conexión y desconexión desde navegador
 - característica para estado del dispositivo
 - característica para comandos básicos

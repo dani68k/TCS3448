@@ -7,13 +7,13 @@
 void setup() {
   Serial.begin(115200);
   delay(250);
-  Serial.println(F("ATLANTES / TCS3448 - BLE Web"));
+  Serial.println(F("TCS3448 - BLE Web"));
   TCS3448Manager::Init();
-  if (!AtlantesBLE::Init()) Serial.println(F("Could not initialize BLE."));
+  if (!TCS3448BLE::Init()) Serial.println(F("Could not initialize BLE."));
 }
 
 void loop() {
-  AtlantesBLE::Update();
+  TCS3448BLE::Update();
   processSerialCommands();
   delay(1);
 }

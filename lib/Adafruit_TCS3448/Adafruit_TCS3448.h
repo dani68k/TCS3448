@@ -194,6 +194,17 @@ typedef union {
 static_assert(sizeof(tcs3448_wire_frame_t) == 37,
               "TCS3448 result frame must be 37 bytes");
 
+// Register-level configuration snapshot; confined to the sensor/driver layer.
+struct tcs3448_settings_t {
+  uint8_t gain;
+  uint8_t atime;
+  uint16_t astep;
+  uint8_t smux;
+  uint8_t autozero;
+  uint16_t ledCurrent;
+  bool ledEnabled;
+};
+
 /**
  * @brief Class for the TCS3448 14-channel multi-spectral sensor.
  *
@@ -252,19 +263,24 @@ class Adafruit_TCS3448 : public Adafruit_AS7343 {
   bool getDataReady(bool* ready);
 
   /**
-   * @brief Read one coherent 18-result frame without waiting.
+   * @brief Read one coherent 6/12/18-result frame without waiting.
    *
-   * Call getDataReady() first. This method addresses ASTATUS once and reads all
-   * 36 following result bytes consecutively, so the gain, saturation flag, and
+   * Call getDataReady() first. This method addresses ASTATUS once and reads the
+   * selected result bytes consecutively, so the gain, saturation flag, and
    * ADC counts describe the same measurement. On Wire implementations with a
    * buffer smaller than 37 bytes, Adafruit BusIO continues the read in chunks
    * with repeated starts and no intervening stop. The sensor must be in
-   * TCS3448_SMUX_18CH mode.
+   * auto-SMUX mode matching channelCount.
    *
    * @param data Destination for the raw result frame.
+   * @param channelCount Number of valid results: 6, 12 or 18 (default).
    * @return True when the complete frame was read successfully.
    */
-  bool readData(tcs3448_data_t* data);
+  bool readData(tcs3448_data_t* data, uint8_t channelCount = TCS3448_CHANNEL_COUNT);
+
+  // Checked I2C readback, unlike the inherited value-only getters.
+  bool readConfiguration(tcs3448_settings_t* settings);
+  bool writeConfiguration(const tcs3448_settings_t& settings);
 
   /**
    * @brief Read the sampled GPIO input with I2C error reporting.
