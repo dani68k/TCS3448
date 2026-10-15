@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ATLANTES · TCS3448 BLE</title>
+  <style>
+{{STYLE}}
+  </style>
+</head>
+<body>
+  <main>
+    <header><p class="eyebrow">ATLANTES / HITO 3</p><h1>TCS3448 · BLE Web</h1><p>Control de adquisición y lectura de canales espectrales.</p></header>
+    <section aria-labelledby="connection-title">
+      <h2 id="connection-title">Conexión</h2>
+      <p id="connection" role="status">Desconectado</p>
+      <div class="actions"><button id="connect">Connect</button><button id="disconnect" disabled>Disconnect</button></div>
+      <p id="support" class="hint">Abre este archivo en un navegador con Web Bluetooth. También funciona desde HTTPS.</p>
+    </section>
+    <div class="columns">
+      <section aria-labelledby="sensor-title">
+        <h2 id="sensor-title">Dispositivo</h2>
+        <div class="actions"><button id="start" disabled>Start</button><button id="stop" disabled>Stop</button><button id="refresh" disabled>Actualizar estado</button></div>
+        <pre id="status" aria-live="polite">Sin estado disponible</pre>
+      </section>
+      <section aria-labelledby="config-title">
+        <h2 id="config-title">Configuración actual <small>Solo lectura</small></h2>
+        <pre id="config">Conecta el dispositivo para consultar la configuración.</pre>
+      </section>
+    </div>
+    <section aria-labelledby="samples-title">
+      <h2 id="samples-title">Última muestra</h2>
+      <p class="hint">Valores ADC sin calibrar. Se muestran los 18 resultados del modo SMUX.</p>
+      <pre id="sample">Esperando adquisición…</pre>
+      <p id="received" class="hint">0 muestras completas recibidas</p>
+    </section>
+    <p id="message" role="alert"></p>
+  </main>
+  <script>
+{{SCRIPT}}
+  </script>
+</body>
+</html>

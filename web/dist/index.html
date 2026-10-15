@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ATLANTES · TCS3448 BLE</title>
+  <style>
+* { box-sizing: border-box; }
+body { margin: 0; background: #eff3f5; color: #18313b; font: 16px/1.5 system-ui, sans-serif; }
+main { max-width: 1060px; margin: 40px auto; padding: 0 20px; }
+header { margin-bottom: 28px; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); margin: 4px 0; letter-spacing: -.03em; }
+h2 { font-size: 1.1rem; margin: 0 0 16px; }
+p { margin: 10px 0; }
+.eyebrow { font-size: .75rem; font-weight: 700; letter-spacing: .15em; color: #367285; }
+section { background: white; border: 1px solid #d6e0e4; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+button { background: #14576b; color: white; border: 1px solid #14576b; border-radius: 6px; padding: 10px 18px; font: inherit; cursor: pointer; }
+button:disabled { opacity: .4; cursor: default; }
+button:focus-visible { outline: 3px solid #d89e31; outline-offset: 3px; }
+#disconnect, #stop, #refresh { background: white; color: #14576b; }
+pre { font: .9rem/1.7 ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 0; }
+.hint, small { color: #536b75; font-size: .85rem; }
+small { display: block; font-weight: normal; }
+#message { color: #a12525; min-height: 24px; }
+@media (max-width: 720px) { .columns { grid-template-columns: 1fr; gap: 0; } main { margin-top: 24px; } }
+
+  </style>
+</head>
+<body>
+  <main>
+    <header><p class="eyebrow">ATLANTES / HITO 3</p><h1>TCS3448 · BLE Web</h1><p>Control de adquisición y lectura de canales espectrales.</p></header>
+    <section aria-labelledby="connection-title">
+      <h2 id="connection-title">Conexión</h2>
+      <p id="connection" role="status">Desconectado</p>
+      <div class="actions"><button id="connect">Connect</button><button id="disconnect" disabled>Disconnect</button></div>
+      <p id="support" class="hint">Abre este archivo en un navegador con Web Bluetooth. También funciona desde HTTPS.</p>
+    </section>
+    <div class="columns">
+      <section aria-labelledby="sensor-title">
+        <h2 id="sensor-title">Dispositivo</h2>
+        <div class="actions"><button id="start" disabled>Start</button><button id="stop" disabled>Stop</button><button id="refresh" disabled>Actualizar estado</button></div>
+        <pre id="status" aria-live="polite">Sin estado disponible</pre>
+      </section>
+      <section aria-labelledby="config-title">
+        <h2 id="config-title">Configuración actual <small>Solo lectura</small></h2>
+        <pre id="config">Conecta el dispositivo para consultar la configuración.</pre>
+      </section>
+    </div>
+    <section aria-labelledby="samples-title">
+      <h2 id="samples-title">Última muestra</h2>
+      <p class="hint">Valores ADC sin calibrar. Se muestran los 18 resultados del modo SMUX.</p>
+      <pre id="sample">Esperando adquisición…</pre>
+      <p id="received" class="hint">0 muestras completas recibidas</p>
+    </section>
+    <p id="message" role="alert"></p>
+  </main>
+  <script>
+(() => {
+"use strict";
+const UUID = Object.freeze({
+  service: "a71a0001-3448-4c53-8a7e-41544c414e54",
+  status: "a71a0002-3448-4c53-8a7e-41544c414e54",
+  command: "a71a0003-3448-4c53-8a7e-41544c414e54",
+  sample: "a71a0004-3448-4c53-8a7e-41544c414e54",
+  config: "a71a0005-3448-4c53-8a7e-41544c414e54",
+});
+const COMMAND = Object.freeze({ START: 1, STOP: 2, GET_STATUS: 3, GET_CONFIG: 4 });
+const CHANNELS = Object.freeze([
+  "FZ", "FY", "FXL", "NIR", "VIS_TL_0", "VIS_BR_0", "F2", "F3", "F4",
+  "F6", "VIS_TL_1", "VIS_BR_1", "F1", "F7", "F8", "F5", "VIS_TL_2", "VIS_BR_2",
+]);
+const GAINS = Object.freeze([0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]);
+const ERRORS = Object.freeze(["Ninguno", "Inicializacion", "Configuracion", "LED", "Comunicacion I2C", "Tiempo de espera agotado"]);
+
+function validate(value, size) {
+  if (!(value instanceof DataView) || value.byteLength !== size) throw new Error("Longitud de paquete incorrecta");
+  if (value.getUint8(0) !== 1) throw new Error("Version de protocolo incompatible");
+}
+function decodeStatus(value) {
+  validate(value, 20);
+  if (value.getUint8(1) > 1 || value.getUint8(2) > 1) throw new Error("Estado invalido");
+  return {
+    ready: !!value.getUint8(1), acquiring: !!value.getUint8(2), error: value.getUint8(3),
+    command: value.getUint8(4), result: value.getUint8(5), counter: value.getUint16(6, true),
+    sampleCount: value.getUint32(8, true), uptimeMs: value.getUint32(12, true), intervalMs: value.getUint32(16, true),
+  };
+}
+function decodeConfig(value) {
+  validate(value, 20);
+  if (value.getUint8(1) >= GAINS.length) throw new Error("Ganancia invalida");
+  return {
+    gain: GAINS[value.getUint8(1)], atime: value.getUint8(2), ledCurrentMa: value.getUint8(3),
+    astep: value.getUint16(4, true), intervalMs: value.getUint16(6, true),
+    integrationMs: value.getUint32(8, true) / 1000, i2cHz: value.getUint32(12, true),
+    sda: value.getUint8(16), scl: value.getUint8(17),
+  };
+}
+class SampleAssembler {
+  constructor() { this.reset(); }
+  reset() { this.pending = null; }
+  push(packet, now = Date.now()) {
+    try {
+      validate(packet, 20);
+      const index = packet.getUint8(1);
+      const sequence = packet.getUint32(4, true);
+      if (index > 3 || packet.getUint8(2) !== 4 || packet.getUint8(3) !== 0) throw new Error("Fragmento invalido");
+      if (index === 0) this.pending = { sequence, next: 0, started: now, bytes: new Uint8Array(48) };
+      const pending = this.pending;
+      if (!pending || pending.sequence !== sequence || pending.next !== index || now - pending.started > 2000) {
+        this.reset();
+        return null;
+      }
+      pending.bytes.set(new Uint8Array(packet.buffer, packet.byteOffset + 8, 12), index * 12);
+      ++pending.next;
+      if (pending.next !== 4) return null;
+      this.reset();
+      const data = new DataView(pending.bytes.buffer);
+      validate(data, 48);
+      if (data.getUint32(4, true) !== sequence || data.getUint8(3) !== 18 || data.getUint8(2) > 1 || data.getUint8(1) >= GAINS.length) throw new Error("Muestra invalida");
+      return {
+        sequence, timestampMs: data.getUint32(8, true), gain: GAINS[data.getUint8(1)],
+        saturated: !!data.getUint8(2), channels: CHANNELS.map((name, i) => [name, data.getUint16(12 + i * 2, true)]),
+      };
+    } catch (error) {
+      this.reset();
+      throw error;
+    }
+  }
+}
+
+
+const el = Object.fromEntries(["connect", "disconnect", "start", "stop", "refresh", "connection", "support", "status", "config", "sample", "received", "message"].map(id => [id, document.getElementById(id)]));
+const assembler = new SampleAssembler();
+let device = null;
+let characteristics = null;
+let latestStatus = null;
+let busy = false;
+let received = 0;
+let lastSequence = null;
+let missed = 0;
+const supported = !!navigator.bluetooth && window.isSecureContext;
+
+function controls() {
+  const linked = !!characteristics && !!device?.gatt?.connected;
+  el.connect.disabled = busy || linked || !supported;
+  el.disconnect.disabled = busy || !linked;
+  el.start.disabled = busy || !linked || !latestStatus?.ready || !!latestStatus?.acquiring;
+  el.stop.disabled = busy || !linked || !latestStatus?.ready;
+  el.refresh.disabled = busy || !linked;
+}
+function showError(error) { el.message.textContent = error.message || String(error); }
+function showStatus(value) {
+  latestStatus = decodeStatus(value);
+  const s = latestStatus;
+  el.status.textContent = [
+    `Sensor: ${s.ready ? "Inicializado" : "No disponible"}`,
+    `Adquisición: ${s.acquiring ? "Activa" : "Detenida"}`,
+    `Error: ${ERRORS[s.error] ?? s.error}`,
+    `Muestras adquiridas: ${s.sampleCount}`,
+    `Periodo solicitado: ${s.intervalMs} ms`,
+    `Tiempo desde arranque: ${(s.uptimeMs / 1000).toFixed(1)} s`,
+  ].join("\n");
+  controls();
+  return s;
+}
+function showConfig(value) {
+  const c = decodeConfig(value);
+  el.config.textContent = [
+    latestStatus?.ready ? "Aplicada al sensor" : "Valores previstos; sensor sin inicializar",
+    `Ganancia: ${c.gain}x`, `ATIME / ASTEP: ${c.atime} / ${c.astep}`,
+    `Integración por ciclo: ${c.integrationMs.toFixed(2)} ms`,
+    `Periodo solicitado: ${c.intervalMs} ms`, `Corriente LED: ${c.ledCurrentMa} mA`,
+    `I2C: ${c.i2cHz} Hz · SDA ${c.sda} · SCL ${c.scl}`,
+  ].join("\n");
+}
+function onStatus(event) {
+  try { showStatus(event.target.value); } catch (error) { showError(error); }
+}
+function onSample(event) {
+  try {
+    const sample = assembler.push(event.target.value);
+    if (!sample) return;
+    if (lastSequence !== null) {
+      const delta = (sample.sequence - lastSequence) >>> 0;
+      if (delta === 0 || delta > 0x7fffffff) return;
+      missed += delta - 1;
+    }
+    lastSequence = sample.sequence;
+    ++received;
+    el.sample.textContent = [
+      `Muestra #${sample.sequence} · ESP32 ${sample.timestampMs} ms`,
+      `Ganancia: ${sample.gain}x · Saturación: ${sample.saturated ? "SÍ" : "No"}`, "",
+      ...sample.channels.map(([name, value]) => `${name.padEnd(10)} ${String(value).padStart(5)}`),
+    ].join("\n");
+    el.received.textContent = `${received} muestras completas recibidas · ${missed} muestras omitidas entre las recibidas`;
+  } catch (error) { showError(error); }
+}
+function clearConnection() {
+  if (characteristics) {
+    characteristics.status.removeEventListener("characteristicvaluechanged", onStatus);
+    characteristics.sample.removeEventListener("characteristicvaluechanged", onSample);
+  }
+  characteristics = null;
+  latestStatus = null;
+  assembler.reset();
+  lastSequence = null;
+  el.connection.textContent = "Desconectado";
+  el.status.textContent = "Sin conexión; adquisición detenida en el dispositivo al detectar la desconexión.";
+  el.config.textContent = "Conecta el dispositivo para consultar la configuración.";
+  el.sample.textContent = "Sin muestra de la conexión actual.";
+  controls();
+}
+
+async function sendCommand(name) {
+  const current = characteristics;
+  if (!current || !device?.gatt?.connected) throw new Error("Dispositivo desconectado");
+  // Poll for application-level completion; a GATT write acknowledgment only accepts the write.
+  const before = decodeStatus(await current.status.readValue()).counter;
+  await current.command.writeValueWithResponse(new TextEncoder().encode(name));
+  const deadline = Date.now() + 3500;
+  while (Date.now() < deadline) {
+    if (characteristics !== current || !device?.gatt?.connected) throw new Error("Conexión perdida");
+    const status = showStatus(await current.status.readValue());
+    if (status.counter !== before && (status.command === COMMAND[name] || status.command === 255)) {
+      if (status.result !== 0) {
+        const results = ["OK", "Comando desconocido", "Error del sensor", "Cola de comandos llena"];
+        throw new Error(`${name}: ${results[status.result] ?? status.result} (${ERRORS[status.error] ?? status.error})`);
+      }
+      if (name === "GET_CONFIG") showConfig(await current.config.readValue());
+      if (name === "STOP") assembler.reset();
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error(`${name}: no se recibió confirmación del dispositivo`);
+}
+async function action(operation) {
+  if (busy) return;
+  busy = true;
+  el.message.textContent = "";
+  controls();
+  try { await operation(); } catch (error) { showError(error); }
+  finally { busy = false; controls(); }
+}
+el.connect.addEventListener("click", () => action(async () => {
+  try {
+    device?.removeEventListener("gattserverdisconnected", clearConnection);
+    device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UUID.service] }] });
+    device.addEventListener("gattserverdisconnected", clearConnection);
+    el.connection.textContent = "Conectando…";
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(UUID.service);
+    // Sequential GATT operations avoid overlapping requests on browser stacks.
+    const status = await service.getCharacteristic(UUID.status);
+    const command = await service.getCharacteristic(UUID.command);
+    const sample = await service.getCharacteristic(UUID.sample);
+    const config = await service.getCharacteristic(UUID.config);
+    characteristics = { status, command, sample, config };
+    status.addEventListener("characteristicvaluechanged", onStatus);
+    sample.addEventListener("characteristicvaluechanged", onSample);
+    await status.startNotifications();
+    await sample.startNotifications();
+    received = missed = 0;
+    lastSequence = null;
+    assembler.reset();
+    el.sample.textContent = "Esperando adquisición…";
+    el.received.textContent = "0 muestras completas recibidas";
+    await sendCommand("GET_STATUS");
+    await sendCommand("GET_CONFIG");
+    if (!device.gatt.connected) throw new Error("Conexión perdida durante la configuración");
+    el.connection.textContent = `Conectado · ${device.name || "ATLANTES-TCS3448"}`;
+  } catch (error) {
+    device?.gatt?.disconnect();
+    clearConnection();
+    throw error;
+  }
+}));
+el.disconnect.addEventListener("click", () => action(async () => {
+  try { await sendCommand("STOP"); }
+  finally { device?.gatt?.disconnect(); clearConnection(); }
+}));
+el.start.addEventListener("click", () => action(() => sendCommand("START")));
+el.stop.addEventListener("click", () => action(() => sendCommand("STOP")));
+el.refresh.addEventListener("click", () => action(async () => {
+  await sendCommand("GET_STATUS");
+  await sendCommand("GET_CONFIG");
+}));
+if (!supported) el.support.textContent = "Web Bluetooth no está disponible. Abre este archivo en un navegador compatible con Web Bluetooth o utiliza HTTPS.";
+controls();
+
+})();
+  </script>
+</body>
+</html>

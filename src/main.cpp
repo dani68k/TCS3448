@@ -2,25 +2,18 @@
 
 #include "SerialCommand/SerialCommand.h"
 #include "TCS3448Manager/TCS3448Manager.h"
-
-namespace {
-bool sensorReady = false;
-}
+#include "ble/ble.h"
 
 void setup() {
   Serial.begin(115200);
   delay(250);
-  Serial.println(F("Adafruit TCS3448 basic readings"));
-
-  sensorReady = TCS3448Manager::Init();
-  if (sensorReady) {
-    TCS3448Manager::LEDEnable();
-    TCS3448Manager::PrintHeader();
-  }
+  Serial.println(F("ATLANTES / TCS3448 - BLE Web"));
+  TCS3448Manager::Init();
+  if (!AtlantesBLE::Init()) Serial.println(F("Could not initialize BLE."));
 }
 
 void loop() {
-  if (sensorReady) TCS3448Manager::PrintReadings();
+  AtlantesBLE::Update();
   processSerialCommands();
-  delay(500);
+  delay(1);
 }
