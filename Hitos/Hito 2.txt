@@ -1,0 +1,542 @@
+Proyecto: ATLANTES
+Entorno: ESP32 + PlatformIO + Arduino framework + VSCode
+Sensor: ams OSRAM TCS3448
+Librería actual: Adafruit_TCS3448, basada en la arquitectura de Adafruit_AS7343
+
+Contexto general
+---------------
+Este proyecto forma parte de ATLANTES y tiene como objetivo desarrollar una plataforma experimental para caracterización óptica, colorimetría y volumetría usando el sensor multiespectral TCS3448.
+
+El sensor ya está funcionando correctamente en el ESP32 y actualmente ya puedo:
+- inicializar el TCS3448
+- configurar el sensor
+- adquirir datos
+- visualizar lecturas por terminal serie
+
+Por tanto, el HITO 1 ya está implementado y debe conservarse.
+
+NO quiero reescribir desde cero el código existente.
+NO quiero sustituir innecesariamente la librería Adafruit_TCS3448.
+NO quiero alterar la funcionalidad actual que ya permite inicialización y lectura correcta del sensor.
+
+El objetivo de este trabajo es implementar el HITO 2:
+crear una arquitectura interna limpia, estructurada y reutilizable para representar:
+1. la configuración del sensor
+2. las muestras adquiridas
+3. el estado de cada adquisición
+4. una capa de gestión del sensor desacoplada del resto de la aplicación
+
+Esta arquitectura será la base para los siguientes hitos:
+- interfaz BLE Web
+- configuración remota del sensor
+- visualización gráfica de canales
+- adquisición DARK / REFERENCE / SAMPLE
+- transmitancia
+- absorbancia
+- curvas de calibración
+- volumetría
+- comparación con AS7265x
+
+Objetivo principal del Hito 2
+----------------------------
+Quiero separar claramente:
+
+CONFIGURACIÓN
+= cómo quiero medir
+
+MUESTRA
+= qué he medido
+
+GESTOR DEL SENSOR
+= cómo se aplica la configuración y cómo se obtiene una muestra
+
+La interfaz BLE Web futura NO debe acceder directamente a registros del TCS3448 ni depender de detalles internos de la librería Adafruit.
+
+Debe trabajar únicamente con estructuras de datos y métodos de alto nivel.
+
+Arquitectura deseada
+--------------------
+
+Crear como mínimo estas tres entidades:
+
+1. TCS3448Config
+2. TCS3448Sample
+3. TCS3448Manager
+
+Puedes adaptar nombres o tipos si existe una razón técnica clara, pero quiero mantener esta filosofía.
+
+==================================================
+1. ESTRUCTURA TCS3448Config
+==================================================
+
+Crear una estructura que represente de forma completa la configuración relevante del sensor.
+
+Debe incluir como mínimo:
+
+- gain
+- integration time
+- LED current
+- auto SMUX mode
+- LED enabled
+- autozero configuration
+- sample period / acquisition period si ya tiene sentido en la arquitectura actual
+
+Ejemplo conceptual:
+
+struct TCS3448Config {
+    ...
+};
+
+IMPORTANTE:
+No asumir que gain debe almacenarse únicamente como un valor numérico arbitrario.
+Si la librería Adafruit utiliza enums propios para gain, estudiar el código existente y decidir si:
+- conviene usar directamente ese enum
+o
+- conviene encapsularlo en un tipo propio
+
+Quiero evitar dependencias innecesarias de la capa superior respecto a Adafruit, pero tampoco quiero duplicar lógica sin necesidad.
+
+La configuración debe poder:
+- inicializarse con valores por defecto razonables
+- consultarse desde otras capas
+- modificarse
+- aplicarse al sensor
+
+Si algunos campos no pueden aplicarse todavía porque la librería actual no los soporta directamente, dejar la arquitectura preparada pero NO inventar APIs inexistentes.
+
+==================================================
+2. ESTRUCTURA TCS3448Sample
+==================================================
+
+Crear una estructura para representar una adquisición completa.
+
+Debe guardar los canales espectrales relevantes del TCS3448.
+
+Canales principales:
+
+- F1
+- F2
+- FZ
+- F3
+- F4
+- F5
+- FY
+- FXL
+- F6
+- F7
+- F8
+- NIR
+
+Además, si la librería o el modo de lectura actual devuelve VIS/CLEAR:
+- vis1
+- vis2
+
+Si existe información Flicker en la adquisición normal y tiene sentido almacenarla, puede añadirse, pero NO es prioritaria para ATLANTES en esta fase.
+
+También quiero almacenar metadatos de adquisición:
+
+- timestamp en ms
+- valid / data ready
+- analog saturation
+- digital saturation
+- gain realmente usado
+- integration time realmente usado
+- LED current usado
+- LED state
+
+La filosofía importante es:
+
+UNA MUESTRA DEBE CONTENER NO SOLO LOS COUNTS, SINO TAMBIÉN LA CONFIGURACIÓN REAL CON LA QUE FUE ADQUIRIDA.
+
+Esto es fundamental porque:
+
+12000 counts medidos con:
+gain = 16x
+integration = 20 ms
+
+NO son directamente equivalentes a:
+
+12000 counts medidos con:
+gain = 256x
+integration = 100 ms
+
+Por tanto, cada muestra debe ser autosuficiente para poder analizarse posteriormente.
+
+Si técnicamente resulta mejor que TCS3448Sample contenga una copia completa o parcial de TCS3448Config, se puede hacer.
+
+Quiero que evalúes cuál es la solución más limpia.
+
+==================================================
+3. CLASE TCS3448Manager
+==================================================
+
+Crear una clase de alto nivel que encapsule el funcionamiento del sensor.
+
+Objetivo:
+
+El resto de la aplicación NO debería llamar directamente a funciones de bajo nivel de Adafruit_TCS3448 salvo dentro del Manager.
+
+La clase debería proporcionar una API de alto nivel similar conceptualmente a:
+
+class TCS3448Manager {
+public:
+    bool begin();
+
+    bool setConfig(const TCS3448Config& config);
+    const TCS3448Config& getConfig() const;
+
+    bool startMeasurement();
+    bool isDataReady();
+
+    bool readSample(TCS3448Sample& sample);
+
+    bool isSaturated();
+
+    ...
+};
+
+No es obligatorio usar exactamente estas firmas.
+Adáptalas al código existente.
+
+La prioridad es:
+- claridad
+- robustez
+- desacoplamiento
+- fácil mantenimiento
+- fácil integración futura con BLE Web
+
+==================================================
+4. FUNCIONAMIENTO DE readSample()
+==================================================
+
+Quiero que readSample() sea el punto principal para obtener una adquisición completa.
+
+Debe:
+
+1. comprobar si los datos son válidos si la librería lo permite
+2. leer todos los canales disponibles
+3. guardar timestamp
+4. guardar estado de saturación
+5. guardar la configuración de adquisición usada
+6. devolver true/false según éxito
+
+No quiero que la capa superior tenga que conocer:
+- registros ADATA
+- orden del SMUX
+- detalles de packing
+- orden de lectura interno
+
+Eso debe quedar encapsulado.
+
+==================================================
+5. SATURACIÓN Y ESTADO DE ADQUISICIÓN
+==================================================
+
+Quiero dejar preparada la arquitectura para diferenciar:
+
+- medida válida
+- saturación analógica
+- saturación digital
+- datos todavía no disponibles
+- error de comunicación
+
+Si la librería Adafruit actual NO expone alguna de estas funciones:
+- identificar claramente qué parte falta
+- NO inventar métodos de librería
+- si hace falta acceder a registros directamente, hacerlo solo dentro de TCS3448Manager
+- encapsular esos accesos
+
+Evitar que código externo tenga que conocer registros como:
+STATUS
+STATUS2
+ASTATUS
+
+Si se implementa acceso directo a registros, añadir comentarios claros indicando:
+- dirección
+- significado
+- por qué se usa
+
+==================================================
+6. ORGANIZACIÓN DE FICHEROS
+==================================================
+
+Quiero una organización limpia del proyecto.
+
+Por ejemplo:
+
+src/
+    main.cpp
+    TCS3448Manager.cpp
+
+include/
+    TCS3448Manager.h
+    TCS3448Types.h
+
+o una estructura equivalente si el proyecto actual ya sigue otra organización.
+
+Evitar meter toda la lógica en main.cpp.
+
+main.cpp debe quedar orientado principalmente a:
+- inicialización general
+- loop
+- llamadas de alto nivel
+- impresión temporal de resultados
+
+==================================================
+7. COMPATIBILIDAD CON EL CÓDIGO ACTUAL
+==================================================
+
+Muy importante:
+
+ANTES de modificar nada:
+1. revisar el código actual completo
+2. identificar cómo se inicializa Adafruit_TCS3448
+3. identificar cómo se configuran gain e integration time
+4. identificar cómo se leen actualmente los canales
+5. reutilizar todo lo que ya funciona
+
+No eliminar funciones existentes sin motivo.
+
+Si actualmente hay funciones de prueba o debug útiles:
+- pueden mantenerse
+- pero evitar duplicar lógica
+
+==================================================
+8. SALIDA POR SERIAL
+==================================================
+
+Aunque el futuro será BLE Web, por ahora quiero mantener salida serial para validar el Hito 2.
+
+Después de cada lectura quiero poder mostrar algo limpio como:
+
+TCS3448 SAMPLE
+--------------
+timestamp: 123456 ms
+
+F1  : 1234
+F2  : 2345
+FZ  : 3456
+F3  : 4567
+F4  : 5678
+F5  : 6789
+FY  : 7890
+FXL : 8000
+F6  : 9000
+F7  : 10000
+F8  : 11000
+NIR : 12000
+
+VIS1: ...
+VIS2: ...
+
+Gain: ...
+Integration: ... ms
+LED current: ... mA
+
+Valid: YES
+Analog saturation: NO
+Digital saturation: NO
+
+No hace falta usar exactamente este formato, pero quiero una salida fácil de leer durante desarrollo.
+
+==================================================
+9. PREPARAR LA ARQUITECTURA PARA BLE WEB
+==================================================
+
+Aunque NO quiero implementar BLE todavía en este hito, la arquitectura debe quedar preparada para ello.
+
+La futura interfaz BLE deberá poder hacer:
+
+GET CONFIG
+SET CONFIG
+START
+STOP
+READ SAMPLE
+
+Por tanto, evitar diseños basados en variables globales dispersas.
+
+Idealmente quiero tener:
+
+TCS3448Manager sensorManager;
+
+y desde una futura capa BLE poder llamar:
+
+sensorManager.getConfig();
+sensorManager.setConfig(...);
+sensorManager.readSample(...);
+
+==================================================
+10. NO IMPLEMENTAR TODAVÍA
+==================================================
+
+NO implementar todavía:
+
+- BLE
+- Web Bluetooth
+- interfaz gráfica
+- histogramas
+- transmitancia
+- absorbancia
+- DARK
+- REFERENCE
+- SAMPLE mode
+- curvas de calibración
+- auto gain
+- auto exposure
+- CSV
+- volumetría
+
+Este Hito 2 debe quedarse centrado exclusivamente en arquitectura de datos y gestión limpia del TCS3448.
+
+==================================================
+11. CRITERIOS DE CALIDAD
+==================================================
+
+Quiero código:
+
+- legible
+- modular
+- comentado solo donde aporte valor
+- sin abstracciones innecesarias
+- adecuado para ESP32
+- adecuado para Arduino/PlatformIO
+- sin uso excesivo de memoria dinámica
+- evitar String si no es necesario
+- evitar new/delete
+- preferir estructuras simples
+- fácil de mantener
+- fácil de extender
+
+No quiero una arquitectura excesivamente enterprise para un firmware embebido.
+
+Mantener equilibrio entre:
+simplicidad + robustez + extensibilidad
+
+==================================================
+12. PROCEDIMIENTO DE TRABAJO
+==================================================
+
+Quiero que trabajes de esta manera:
+
+PASO 1
+Analiza la estructura actual del proyecto.
+
+PASO 2
+Explícame brevemente:
+- qué archivos modificarías
+- qué archivos nuevos crearías
+- qué responsabilidades tendrá cada uno
+
+PASO 3
+Implementa TCS3448Config y TCS3448Sample.
+
+PASO 4
+Implementa TCS3448Manager reutilizando la lógica existente.
+
+PASO 5
+Adapta main.cpp para utilizar TCS3448Manager.
+
+PASO 6
+Compila el proyecto con PlatformIO.
+
+PASO 7
+Corrige cualquier error de compilación.
+
+PASO 8
+Revisa posibles warnings.
+
+PASO 9
+Muéstrame un resumen final de los cambios realizados.
+
+No quiero que te detengas después de escribir código:
+quiero que compiles y verifiques que el proyecto sigue construyendo correctamente.
+
+==================================================
+13. RESULTADO ESPERADO
+==================================================
+
+Al terminar este Hito 2 quiero poder tener conceptualmente:
+
+TCS3448Config config;
+
+config.gain = ...;
+config.integrationTime = ...;
+config.ledCurrent = ...;
+
+sensorManager.setConfig(config);
+
+TCS3448Sample sample;
+
+if (sensorManager.readSample(sample)) {
+    // sample contiene todos los canales
+    // sample contiene timestamp
+    // sample contiene saturación
+    // sample contiene la configuración usada
+}
+
+Y quiero que main.cpp ya no necesite conocer detalles internos del sensor.
+
+==================================================
+14. MUY IMPORTANTE: NO SUPONER API
+==================================================
+
+La librería Adafruit_TCS3448 puede no exponer todas las funciones necesarias.
+
+Por tanto:
+
+- inspecciona primero la librería instalada
+- comprueba las clases y métodos reales
+- NO escribas código basándote en métodos imaginarios
+- reutiliza exactamente la API disponible
+- si falta alguna funcionalidad, indícalo
+- si hay que implementar acceso directo a registros, encapsúlalo dentro del Manager
+
+Además, Adafruit_TCS3448 está basada en Adafruit_AS7343, por lo que parte de la arquitectura o nombres pueden ser heredados.
+
+Comprueba la implementación real antes de decidir el mapping de canales.
+
+==================================================
+15. MAPEO DE CANALES
+==================================================
+
+No asumir el mapping de los datos simplemente por orden.
+
+Verificar en la librería Adafruit_TCS3448 cómo se asignan realmente los valores leídos a:
+
+F1
+F2
+FZ
+F3
+F4
+F5
+FY
+FXL
+F6
+F7
+F8
+NIR
+VIS/CLEAR
+
+Quiero que el mapping quede centralizado dentro del Manager.
+
+Si existen 18 valores internos por auto-SMUX, NO exponer simplemente ADATA0...ADATA17 a la aplicación.
+
+La aplicación debe trabajar con nombres físicos de canal.
+
+==================================================
+16. OBJETIVO FUTURO DE ESTA ARQUITECTURA
+==================================================
+
+Recuerda que esta capa será usada más adelante para instrumentación científica.
+
+Queremos poder comparar medidas realizadas en distintos momentos y con distintas configuraciones.
+
+Por tanto, priorizar:
+- trazabilidad de cada muestra
+- reproducibilidad
+- metadatos
+- detección de errores
+- separación clara entre hardware y análisis
+
+Este es el HITO 2 del proyecto ATLANTES.
+Implementarlo sin ampliar todavía el alcance a los siguientes hitos.

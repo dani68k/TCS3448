@@ -1,0 +1,24 @@
+HITO 3 — BLE Web básico
+Objetivo:
+Crear una comunicación BLE estable entre el ESP32 y un navegador compatible
+para consultar el estado del sensor, iniciar/parar adquisición y recibir muestras.
+El alcance debería incluir:
+- servicio BLE propio para ATLANTES/TCS3448
+- conexión y desconexión desde navegador
+- característica para estado del dispositivo
+- característica para comandos básicos
+- característica para recibir muestras
+- comandos:
+  - START
+  - STOP
+  - GET_STATUS
+  - GET_CONFIG
+- envío periódico de TCS3448Sample
+- una página HTML/JS mínima con:
+  - botón Connect
+  - estado de conexión
+  - botón Start
+  - botón Stop
+  - visualización textual de los canales
+  - configuración actual en modo lectura
+Podemos hacer varios pasos intermiedios para el alcance de este Hito.

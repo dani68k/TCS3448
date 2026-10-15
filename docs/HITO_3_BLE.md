@@ -1,5 +1,7 @@
 # Hito 3 — ATLANTES / TCS3448 BLE Web
 
+[Arquitectura global y arranque de la aplicación](../README_APP.md).
+
 Implementación local de firmware y cliente Web Bluetooth. La compilación y las
 pruebas automáticas no verifican por sí mismas la estabilidad de radio ni el
 funcionamiento del sensor físico: completar los pasos de aceptación de abajo.
@@ -12,8 +14,10 @@ funcionamiento del sensor físico: completar los pasos de aceptación de abajo.
 - `src/ble/BLEProtocol.h`: UUID, identificadores y codificación del protocolo v1.
 - `web/dist/index.html`: página autocontenida para abrir con doble clic o publicar.
 - `web/src/`: fuentes de la página; `scripts/build-web.mjs` genera el HTML final.
-- `test/web_protocol.test.mjs`: decodificación y recuperación de fragmentos.
-- `test/web_app.test.mjs`: flujo de la aplicación con un dispositivo simulado.
+
+Cada módulo dispone de su README enlazado desde la documentación global.
+Las pruebas JS anteriores se han eliminado de `test/`; actualmente no hay una
+batería automática del protocolo o la interfaz en esa carpeta.
 
 No hay comandos serie activos. El puerto serie conserva los mensajes de diagnóstico.
 
@@ -60,7 +64,7 @@ se descartan. Un desbordamiento se comunica como resultado 3, comando 255.
 
 GET_CONFIG actualiza la característica de configuración; después de recibir la
 confirmación, leerla. GET_STATUS actualiza y notifica el estado. El estado se
-actualiza tambión cada segundo mientras hay conexión y ante fallos. No se puede
+actualiza también cada segundo mientras hay conexión y ante fallos. No se puede
 modificar la configuración desde la página.
 
 Todos los enteros multibyte se codifican **little-endian**; nunca se transmite la
@@ -168,8 +172,8 @@ node scripts/build-web.mjs
 ```
 
 Conservar `web/dist/index.html` actualizado en el repositorio. No editarlo a mano,
-porque se genera a partir de las fuentes. Las pruebas de la aplicación ejecutan el
-script incluido en ese mismo HTML.
+porque se genera a partir de las fuentes. Después de regenerarlo, probar ese mismo
+HTML con el dispositivo siguiendo los pasos de aceptación.
 
 ## Pasos de aceptación en hardware
 
@@ -201,10 +205,9 @@ no requieren mantener ningún servidor en ejecución.
 node scripts/build-web.mjs
 node --check web/src/app.mjs
 node --check web/src/protocol.mjs
-node --test test/web_protocol.test.mjs test/web_app.test.mjs
 ```
 
-Las pruebas de la aplicación usan un GATT simulado: validan controles, confirmaciones,
-errores y reconexión, pero no prueban las tareas del ESP32, la radio ni la interfaz
-visual en un navegador. El soporte de reconexión exige volver a suscribirse segón la
+Estos comandos compilan el firmware, generan el HTML y comprueban sintaxis; no
+verifican la radio, el sensor ni la interfaz en un navegador. Completar las pruebas
+en hardware descritas arriba. El soporte de reconexión exige volver a suscribirse según la
 [especificación Web Bluetooth](https://bluetooth.spec.whatwg.org/).
