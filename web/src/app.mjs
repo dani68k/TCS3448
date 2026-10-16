@@ -1,7 +1,7 @@
 import { UUID, COMMAND, ERRORS, GAINS, decodeStatus, decodeConfig, encodeApply, SampleAssembler } from "./protocol.mjs";
 import { createInstrumentUI } from "./ui.mjs";
 
-const ids = ["connect", "disconnect", "start", "stop", "refresh", "apply", "setup", "gain", "integration", "led-current", "led-enabled", "smux", "autozero", "period", "connection", "support", "status", "config", "config-state", "sample", "received", "message", "nav-measurement", "nav-setup", "measurement-view", "setup-view", "setup-connect-link", "setup-disconnected", "acquisition-state", "device-name", "sample-readout", "summary-sample", "summary-gain", "summary-integration", "sample-state", "frame-label", "debug-log", "config-detail", "led-label"];
+const ids = ["connect", "start", "refresh", "apply", "setup", "gain", "integration", "led-current", "led-enabled", "led-auto", "smux", "autozero", "period", "connection", "support", "status", "config", "config-state", "sample", "received", "message", "nav-measurement", "nav-setup", "nav-debug", "debug-view", "measurement-view", "setup-view", "setup-connect-link", "setup-disconnected", "acquisition-state", "device-name", "sample-readout", "spectral-chart", "summary-led-current", "summary-gain", "summary-integration", "spectral-extrema", "debug-log", "config-detail", "led-label"];
 const el = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 const assembler = new SampleAssembler();
 const ui = createInstrumentUI(el);
@@ -20,10 +20,14 @@ el.gain.replaceChildren(...GAINS.map((gain, code) => new Option(`${gain}x`, Stri
 function controls() {
   const linked = !!characteristics && !!device?.gatt?.connected;
   const ready = linked && latestStatus?.ready && activeConfig?.valid;
-  el.connect.disabled = busy || linked || !supported;
-  el.disconnect.disabled = busy || !linked;
-  el.start.disabled = busy || !ready || !!latestStatus?.acquiring;
-  el.stop.disabled = busy || !linked || !latestStatus?.ready;
+  const running = !!latestStatus?.acquiring;
+  el.connect.disabled = busy || !supported;
+  el.connect.textContent = linked ? "DISCONNECT" : "CONNECT";
+  el.connect.setAttribute("aria-label", linked ? "Disconnect sensor" : "Connect sensor");
+  el.start.disabled = busy || (running ? !linked || !latestStatus?.ready : !ready);
+  el.start.textContent = running ? "STOP" : "START";
+  el.start.className = `button ${running ? "button-stop" : "button-primary"}`;
+  el.start.setAttribute("aria-label", running ? "Stop measurement" : "Start measurement");
   el.refresh.disabled = busy || !linked;
   el.setup.disabled = busy || !ready;
   el.apply.disabled = busy || !ready;
@@ -69,6 +73,7 @@ function fillRequested(c) {
   el.integration.value = String(c.integrationMs);
   el["led-current"].value = String(c.ledCurrentMa);
   el["led-enabled"].checked = c.ledEnabled;
+  el["led-auto"].checked = !!c.ledAuto;
   el.smux.value = String(c.smux);
   el.autozero.value = String(c.autozero);
   el.period.value = String(c.intervalMs);
@@ -84,7 +89,7 @@ function showConfig(value, fill = false) {
 function requestedConfig() {
   return {
     gainCode: Number(el.gain.value), integrationMs: Number(el.integration.value),
-    ledCurrentMa: Number(el["led-current"].value), ledEnabled: el["led-enabled"].checked,
+    ledCurrentMa: Number(el["led-current"].value), ledEnabled: el["led-enabled"].checked, ledAuto: el["led-auto"].checked,
     smux: Number(el.smux.value), autozero: Number(el.autozero.value), intervalMs: Number(el.period.value),
   };
 }
@@ -101,7 +106,7 @@ function onSample(event) {
       missed += delta - 1;
     }
     lastSequence = sample.sequence;
-    ui.sample(sample, !applyingConfig && activeConfig?.valid ? activeConfig.integrationMs : undefined);
+    ui.sample(sample, !applyingConfig && activeConfig?.valid ? activeConfig.integrationMs : undefined, !applyingConfig && activeConfig?.valid ? activeConfig.adcFullScale : undefined, !applyingConfig && activeConfig?.valid ? activeConfig.ledCurrentMa : undefined);
     ++received;
     el.sample.textContent = [
       `Muestra #${sample.sequence} - ESP32 ${sample.timestampMs} ms - ${sample.channelCount} channels`,
@@ -122,12 +127,12 @@ function clearConnection() {
   lastSequence = null;
   ui.connection("disconnected");
   ui.status(null);
-  ui.clearSample();
   el.status.textContent = "Sin estado de la conexion actual.";
   ui.config(null);
-  el.sample.textContent = "Sin muestra de la conexion actual.";
+
   for (const id of ["gain", "integration", "led-current", "smux", "autozero", "period"]) el[id].value = "";
   el["led-enabled"].checked = false;
+  el["led-auto"].checked = false;
   ui.led();
   controls();
 }
@@ -169,6 +174,11 @@ async function action(operation) {
   finally { busy = false; controls(); }
 }
 el.connect.addEventListener("click", () => action(async () => {
+  if (device?.gatt?.connected) {
+    try { await sendCommand("STOP"); }
+    finally { device?.gatt?.disconnect(); clearConnection(); }
+    return;
+  }
   try {
     device?.removeEventListener("gattserverdisconnected", clearConnection);
     device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UUID.service] }] });
@@ -202,12 +212,7 @@ el.connect.addEventListener("click", () => action(async () => {
     throw error;
   }
 }));
-el.disconnect.addEventListener("click", () => action(async () => {
-  try { await sendCommand("STOP"); }
-  finally { device?.gatt?.disconnect(); clearConnection(); }
-}));
-el.start.addEventListener("click", () => action(() => sendCommand("START")));
-el.stop.addEventListener("click", () => action(() => sendCommand("STOP")));
+el.start.addEventListener("click", () => action(() => sendCommand(latestStatus?.acquiring ? "STOP" : "START")));
 el.refresh.addEventListener("click", () => action(async () => {
   await sendCommand("GET_STATUS");
   await sendCommand("GET_CONFIG", { fill: true, allowUnavailable: true });

@@ -1,4 +1,4 @@
-﻿# Fuentes de la Web
+# Fuentes de la Web
 
 [Cliente Web](../README.md) · [Arquitectura de presentación](../../ARCHITECTURE.md).
 
@@ -6,7 +6,7 @@
 
 | Archivo | Cometido |
 | --- | --- |
-| `index.template.html` | Un documento con Measurement y Setup; estado común y Advanced Debug |
+| `index.template.html` | Un documento con Measurement, Setup y Debug; estado comun |
 | `style.css` | Variables y componentes dark, grid/flex y focus/contraste |
 | `ui.mjs` | Presentación, rutas hash y readouts; sin acceso Bluetooth |
 | `app.mjs` | Única sesión GATT, comandos y enlaces con la presentación |
@@ -36,7 +36,8 @@ ya esté aplicada: el estado aplicado se consulta en ACTIVE.
 ## Muestras y estados
 
 SampleAssembler permanece en protocol.mjs. app mantiene la secuencia, las omisiones,
-la reconstrucción de cuatro fragmentos y la limpieza en STOP/APPLY/desconexión.
+la reconstrucción de fragmentos y la limpieza del ensamblador en desconexión.
+La lectura visual permanece en STOP/desconexión y se limpia tras APPLY.
 La notificación se procesa aunque Measurement esté oculta. ui dibuja nombres
 físicos, mientras `sample` conserva en Advanced Debug el texto SMUX original.
 
@@ -60,8 +61,12 @@ node test/web_app.test.mjs
 node test/web_protocol.test.mjs
 ```
 
-El generador elimina imports/exports conocidos, integra los tres módulos y CSS
+El generador elimina imports/exports conocidos, integra los cuatro módulos y CSS
 en `web/dist/index.html` y rechaza dependencias no resueltas. No hay paquetes npm,
 fuentes remotas, segundo documento Setup ni navegación que recargue la aplicación.
 La salida abre directamente desde disco. Las comprobaciones usan DOM/GATT
 simulados; revisar también el navegador real y la continuidad con el ESP32.
+
+`spectral-chart.mjs` implementa el SVG RAW, mapping centralizado y escala fija ADC Full Scale.
+Su API, longitudes de onda, extremos MAX/MIN y estados se documentan en el
+[README web](../README.md#componente-espectral-hito-5a1).

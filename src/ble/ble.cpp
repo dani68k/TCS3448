@@ -66,7 +66,7 @@ void publishConfig() {
   packet[1] = static_cast<uint8_t>(config.gain);
   packet[2] = static_cast<uint8_t>(config.smux);
   packet[3] = static_cast<uint8_t>(config.autozero);
-  packet[4] = config.ledEnabled;
+  packet[4] = config.ledAuto ? 2 : config.ledEnabled;
   packet[5] = state.ready;
   Put16(packet + 6, config.ledCurrent);
   Put32(packet + 8, static_cast<uint32_t>(config.integrationMs * 1000.0 + 0.5));

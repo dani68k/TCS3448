@@ -1,4 +1,4 @@
-﻿# Herramientas de la aplicación
+# Herramientas de la aplicación
 
 [Aplicación](../README_APP.md) · [Web](../web/README.md).
 
@@ -11,7 +11,7 @@ abrir el HTML generado. Ejecutar desde la raíz del proyecto.
 node scripts/build-web.mjs
 ```
 
-Lee plantilla, CSS, protocolo, UI y aplicación de `web/src/`; integra los tres módulos
+Lee plantilla, CSS, protocolo, SpectralChart, UI y aplicación de `web/src/`; integra los cuatro módulos
 en un ámbito privado como script clásico y escribe `web/dist/index.html` UTF-8.
 Resuelve rutas respecto al propio script. El HTML resultante es autocontenido.
 Retira BOM UTF-8 antes de incrustar fuentes, para que no invalide selectores CSS.

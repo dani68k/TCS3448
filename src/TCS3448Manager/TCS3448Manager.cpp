@@ -22,9 +22,9 @@ uint8_t smuxCode(TCS3448SmuxMode mode) {
 uint8_t zeroCode(TCS3448AutoZeroMode mode) {
   return mode == TCS3448AutoZeroMode::Disabled ? 0 : mode == TCS3448AutoZeroMode::FirstMeasurement ? 255 : 1;
 }
-tcs3448_settings_t settingsFor(const TCS3448Config& config, const TCS3448Timing& timing) {
+tcs3448_settings_t settingsFor(const TCS3448Config& config, const TCS3448Timing& timing, bool acquiring = status.acquiring) {
   return {static_cast<uint8_t>(config.gain), timing.atime, timing.astep,
-          smuxCode(config.smux), zeroCode(config.autozero), config.ledCurrent, config.ledEnabled};
+          smuxCode(config.smux), zeroCode(config.autozero), config.ledCurrent, config.ledAuto ? acquiring : config.ledEnabled};
 }
 bool sameSettings(const tcs3448_settings_t& a, const tcs3448_settings_t& b) {
   return a.gain == b.gain && a.atime == b.atime && a.astep == b.astep &&
@@ -37,7 +37,7 @@ bool verify(const tcs3448_settings_t& expected) {
 void logApplied() {
   Serial.printf("[TCS3448] applied: gain_code=%u integration=%.5fms LED=%umA/%s SMUX=%u AZ=%u period=%lums ADC=%u\n",
       static_cast<unsigned>(currentConfig.gain), currentConfig.integrationMs,
-      currentConfig.ledCurrent, currentConfig.ledEnabled ? "ON" : "OFF",
+      currentConfig.ledCurrent, currentConfig.ledAuto ? "AUTO" : currentConfig.ledEnabled ? "ON" : "OFF",
       static_cast<unsigned>(currentConfig.smux), static_cast<unsigned>(currentConfig.autozero),
       static_cast<unsigned long>(currentConfig.sampleIntervalMs), activeTiming.adcFullScale);
 }
@@ -129,7 +129,7 @@ TCS3448Error ApplyConfig(const TCS3448Config& requested) {
   if (requested.sdaPin != currentConfig.sdaPin || requested.sclPin != currentConfig.sclPin ||
       requested.i2cFrequency != currentConfig.i2cFrequency) return TCS3448Error::InvalidPayload;
   if (!status.ready || !RefreshConfig()) return TCS3448Error::ConfigApplyFailed;
-  const auto previous = settingsFor(currentConfig, activeTiming);
+  const auto previous = settingsFor(currentConfig, activeTiming, false);
   const auto proposed = settingsFor(requested, proposedTiming);
   const bool wasRunning = status.acquiring;
   status.acquiring = false;
@@ -167,6 +167,10 @@ bool StartAcquisition() {
     fail(TCS3448Error::Communication);
     return false;
   }
+  if (currentConfig.ledAuto && (!sensor.enableLED(true) || !verify(settingsFor(currentConfig, activeTiming, true)))) {
+    fail(TCS3448Error::Led);
+    return false;
+  }
   status.error = TCS3448Error::None;
   status.acquiring = true;
   measurementPending = false;
@@ -180,12 +184,12 @@ bool StopAcquisition(bool turnOffLED) {
   if (!initialized) return false;
   const bool stopped = sensor.stopMeasurement();
   bool ledOff = true;
-  if (turnOffLED) {
+  if (turnOffLED || currentConfig.ledAuto) {
     ledOff = sensor.enableLED(false);
     auto expected = settingsFor(currentConfig, activeTiming);
     expected.ledEnabled = false;
     ledOff = ledOff && verify(expected);
-    if (ledOff && currentConfig.ledEnabled) {
+    if (ledOff && currentConfig.ledEnabled && !currentConfig.ledAuto) {
       currentConfig.ledEnabled = false;
       ++status.configRevision;
     }
@@ -241,6 +245,7 @@ bool Update(TCS3448Sample& sample) {
 bool LEDEnable() {
   auto config = currentConfig;
   config.ledEnabled = true;
+  config.ledAuto = false;
   return ApplyConfig(config) == TCS3448Error::None;
 }
 float GetIntegrationTime() { return currentConfig.integrationMs; }

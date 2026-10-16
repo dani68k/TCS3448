@@ -34,13 +34,14 @@ export function decodeStatus(value) {
   };
 }
 export function decodeConfig(value) {
-  validate(value, 20, 2);
+  const version = value instanceof DataView && value.byteLength ? value.getUint8(0) : 0;
+  validate(value, 20, version === 3 ? 3 : 2);
   const gainCode = value.getUint8(1);
   const smux = value.getUint8(2);
   const autozero = value.getUint8(3);
-  if (gainCode >= GAINS.length || ![6, 12, 18].includes(smux) || autozero > 2 || value.getUint8(4) > 1 || value.getUint8(5) > 1) throw new Error("Configuracion recibida invalida");
+  if (gainCode >= GAINS.length || ![6, 12, 18].includes(smux) || autozero > 2 || value.getUint8(4) > (version === 3 ? 2 : 1) || value.getUint8(5) > 1) throw new Error("Configuracion recibida invalida");
   return {
-    gainCode, gain: GAINS[gainCode], smux, autozero, ledEnabled: !!value.getUint8(4), valid: !!value.getUint8(5),
+    gainCode, gain: GAINS[gainCode], smux, autozero, ledEnabled: value.getUint8(4) === 1, ledAuto: value.getUint8(4) === 2, valid: !!value.getUint8(5),
     ledCurrentMa: value.getUint16(6, true), integrationMs: value.getUint32(8, true) / 1000,
     intervalMs: value.getUint32(12, true), adcFullScale: value.getUint16(16, true), revision: value.getUint16(18, true),
   };
@@ -49,6 +50,7 @@ export function validateRequested(config) {
   if (!Number.isInteger(config.gainCode) || config.gainCode < 0 || config.gainCode >= GAINS.length) throw new Error("INVALID_GAIN");
   if (!Number.isFinite(config.integrationMs) || config.integrationMs <= 0 || Math.round(config.integrationMs * 1000) < 6 || config.integrationMs * 1000 > 0xffffffff) throw new Error("INVALID_INTEGRATION");
   if (!Number.isInteger(config.ledCurrentMa) || config.ledCurrentMa < 4 || config.ledCurrentMa > 258 || config.ledCurrentMa % 2) throw new Error("INVALID_LED_CURRENT");
+  if (config.ledAuto !== undefined && typeof config.ledAuto !== "boolean") throw new Error("INVALID_CONFIG_PAYLOAD");
   if (typeof config.ledEnabled !== "boolean") throw new Error("INVALID_CONFIG_PAYLOAD");
   if (![6, 12, 18].includes(config.smux)) throw new Error("INVALID_SMUX_MODE");
   if (!Number.isInteger(config.autozero) || config.autozero < 0 || config.autozero > 2) throw new Error("INVALID_AUTOZERO");
@@ -61,7 +63,7 @@ export function encodeApply(config) {
   validateRequested(config);
   const bytes = new Uint8Array(20);
   const view = new DataView(bytes.buffer);
-  bytes.set([0xa4, 2, config.gainCode, config.smux, config.autozero, Number(config.ledEnabled)]);
+  bytes.set([0xa4, config.ledAuto ? 3 : 2, config.gainCode, config.smux, config.autozero, config.ledAuto ? 2 : Number(config.ledEnabled)]);
   view.setUint16(6, config.ledCurrentMa, true);
   view.setUint32(8, Math.round(config.integrationMs * 1000), true);
   view.setUint32(12, config.intervalMs, true);

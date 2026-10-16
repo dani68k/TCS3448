@@ -120,3 +120,12 @@ Compilar con `pio run -e esp32dev`. La verificación JS no prueba esta máquina 
 estados ni el I2C real: comprobar periodos límite, readback, cambios RUNNING,
 SMUX, LED 258 mA y rollback/fallos siguiendo la
 [aceptación en hardware](../../docs/HITO_3_BLE.md#pasos-de-aceptación-en-hardware).
+
+## LED AUTO
+
+`TCS3448Config.ledAuto` tiene prioridad sobre `ledEnabled`. En AUTO el LED sigue
+`status.acquiring`: START lo enciende y verifica antes de iniciar medidas; STOP
+lo apaga, sin borrar el modo AUTO. Desconexion/fallo tambien lo apagan. APPLY
+calcula el estado fisico segun la adquisicion anterior y verifica los registros.
+Si falla APPLY, rollback restaura AUTO con LED apagado y adquisicion detenida.
+Manual OFF/ON conserva el comportamiento anterior. No se persiste tras reinicio.

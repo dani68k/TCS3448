@@ -28,7 +28,7 @@ Características con sufijo `-7f2a-4f6c-9e31-8dbe0c2f5a70`:
 | `34480002` | STATUS | Read + Notify, 20 bytes, versión 1 |
 | `34480003` | COMMAND | Write con respuesta; ASCII o APPLY binario |
 | `34480004` | SAMPLE | Notify, cuatro fragmentos de 20 bytes, versión 1 |
-| `34480005` | CONFIG | Read, 20 bytes, versión 2 |
+| `34480005` | CONFIG | Read, 20 bytes, versión 3 |
 
 START, STOP, GET_STATUS y GET_CONFIG siguen siendo ASCII sin terminador. APPLY_CONFIG
 usa un paquete de 20 bytes etiquetado 0xA4 con parámetros completos. El protocolo
@@ -97,3 +97,11 @@ Compilar `pio run -e esp32dev`; generar HTML y ejecutar
 La simulación no ejecuta esta cola ni los callbacks reales; completar la
 [prueba en hardware](../../docs/HITO_3_BLE.md#pasos-de-aceptación-en-hardware),
 incluyendo cambio de parámetros durante RUNNING y desconexión durante APPLY.
+
+## Extension LED AUTO
+
+CONFIG v3: byte 4 es modo LED 0 OFF, 1 ON, 2 AUTO. APPLY v3: byte 5 usa esos
+mismos codigos; el resto de offsets y los 20 bytes no cambian. Se acepta APPLY
+v2 para manual OFF/ON. START/STOP controlan el LED en AUTO; manual conserva
+su estado con STOP. Desconexion/fallo apagan ambos modos y conservan AUTO.
+Actualizar firmware y HTML juntos para utilizar AUTO.

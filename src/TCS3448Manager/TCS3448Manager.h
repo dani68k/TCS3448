@@ -12,7 +12,7 @@ bool RefreshConfig();
 TCS3448Error ApplyConfig(const TCS3448Config& config);
 const char* ErrorName(TCS3448Error error);
 bool StartAcquisition();
-// Normal STOP preserves the explicitly configured LED. Disconnect/fault turns it off.
+// STOP turns AUTO off and preserves manual LED. Disconnect/fault always turns it off.
 bool StopAcquisition(bool turnOffLED = false);
 bool Update(TCS3448Sample& sample);
 // Diagnostic compatibility API; not used by the BLE acquisition path.

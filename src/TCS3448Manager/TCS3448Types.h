@@ -19,6 +19,7 @@ struct TCS3448Config {
   double integrationMs = 50.04;
   uint16_t ledCurrent = 10;
   bool ledEnabled = false;
+  bool ledAuto = false;
   TCS3448SmuxMode smux = TCS3448SmuxMode::Channels18;
   TCS3448AutoZeroMode autozero = TCS3448AutoZeroMode::FirstMeasurement;
   uint32_t sampleIntervalMs = 500;

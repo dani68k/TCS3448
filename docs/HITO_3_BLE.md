@@ -33,11 +33,11 @@ siguiente; no se divide en escritura de parámetros y comando separado.
 | Offset | Tipo | Contenido |
 | --- | --- | --- |
 | 0 | u8 | Etiqueta 0xA4 |
-| 1 | u8 | Versión de configuración: 2 |
+| 1 | u8 | Version de configuracion: 2 (manual) / 3 (incluye AUTO) |
 | 2 | u8 | Gain, código propio 0..12 |
 | 3 | u8 | SMUX: 6, 12 o 18 |
 | 4 | u8 | Autozero propio: Disabled 0, First 1, Every 2 |
-| 5 | u8 | LED enabled: 0/1 |
+| 5 | u8 | Modo LED: 0 OFF / 1 ON; version 3 admite 2 AUTO |
 | 6 | u16 | Corriente LED en mA (incluye 258 sin truncar) |
 | 8 | u32 | Integración solicitada por ciclo, en microsegundos |
 | 12 | u32 | Periodo solicitado en ms |
@@ -83,15 +83,15 @@ configuración puede coexistir con RUNNING sin alterar el sensor. Una escritura
 GATT confirmada no es un ACK de aplicación. Esperar contador nuevo y comando
 correspondiente. Cola de ocho mensajes; el cliente envía una petición cada vez.
 
-### CONFIG — 20 bytes, versión 2
+### CONFIG — 20 bytes, version 3
 
 | Offset | Tipo | Contenido |
 | --- | --- | --- |
-| 0 | u8 | Versión: 2 |
+| 0 | u8 | Version: 3 |
 | 1 | u8 | Gain, código propio 0..12 |
 | 2 | u8 | SMUX: 6, 12 o 18 |
 | 3 | u8 | Autozero: Disabled 0, First 1, Every 2 |
-| 4 | u8 | LED realmente aplicado: 0/1 |
+| 4 | u8 | Modo LED: 0 OFF / 1 ON / 2 AUTO |
 | 5 | u8 | Configuración confirmada: 0/1 |
 | 6 | u16 | Corriente LED en mA |
 | 8 | u32 | Integración REAL por ciclo, redondeada a microsegundos |
@@ -228,3 +228,15 @@ El verificador usa GATT simulado y ejecuta el script del HTML final: comprueba
 validación cliente, bytes, ACK no optimista, rechazos, reconexión y canales. No
 prueba los setters, los tiempos del sensor, la recuperación I2C real ni el aspecto
 visual de la Web. Completar la aceptación anterior con ESP32 y navegador reales.
+
+## Extension AUTO
+
+El firmware publica CONFIG v3; acepta APPLY v2 (manual OFF/ON) y v3 (OFF/ON/AUTO).
+El cliente actualizado lee ambas versiones y usa APPLY v3 solamente para AUTO.
+En AUTO, START enciende el LED y verifica registros antes de adquirir; STOP,
+desconexion y fallo lo apagan, conservando la preferencia AUTO. Reconectar no
+enciende el LED hasta START. APPLY durante RUNNING conserva RUNNING y aplica
+el estado LED del modo solicitado. Si falla y se restaura AUTO, rollback deja
+LED apagado y adquisicion detenida. No hay cambio en SAMPLE ni STATUS.
+Las indicaciones anteriores de conservar LED en START/STOP corresponden al modo
+manual. AUTO necesita firmware actualizado y se selecciona desde Setup + APPLY.

@@ -12,7 +12,7 @@ const defaults = () => ({ gainCode: 7, integrationMs: 50.04, ledCurrentMa: 10, l
 function configPacket(c) {
   const bytes = new Uint8Array(20);
   const v = new DataView(bytes.buffer);
-  bytes.set([2, c.gainCode, c.smux, c.autozero, Number(c.ledEnabled), Number(c.valid)]);
+  bytes.set([3, c.gainCode, c.smux, c.autozero, c.ledAuto ? 2 : Number(c.ledEnabled), Number(c.valid)]);
   v.setUint16(6, c.ledCurrentMa, true);
   v.setUint32(8, Math.round(c.integrationMs * 1000), true);
   v.setUint32(12, c.intervalMs, true);
@@ -77,7 +77,7 @@ function setup({ ready = true, rejectApply = 0, holdApply = false, subscriptionF
           }
         } else {
           const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-          state.config = { ...state.config, gainCode: bytes[2], smux: bytes[3], autozero: bytes[4], ledEnabled: !!bytes[5],
+          state.config = { ...state.config, gainCode: bytes[2], smux: bytes[3], autozero: bytes[4], ledEnabled: bytes[5] === 1, ledAuto: bytes[5] === 2,
             ledCurrentMa: v.getUint16(6, true), integrationMs: 50.001, intervalMs: v.getUint32(12, true), adcFullScale: 17986, revision: state.config.revision + 1 };
         }
       }
@@ -121,6 +121,17 @@ test("APPLY_CONFIG fits a minimum-MTU write and carries LED 258 mA without trunc
   assert.deepEqual([...packet.slice(0, 8)], [0xa4, 2, 7, 18, 1, 1, 2, 1]);
   assert.equal(new DataView(packet.buffer).getUint32(8, true), 50040);
   assert.deepEqual([...packet.slice(16)], [0, 0, 0, 0]);
+});
+
+test("LED AUTO uses version 3 without changing packet size; legacy mode 2 is rejected", () => {
+  const packet = encodeApply({ ...defaults(), ledAuto: true });
+  assert.equal(packet.length, 20);
+  assert.deepEqual([...packet.slice(0, 6)], [0xa4, 3, 7, 18, 1, 2]);
+  const readback = configPacket({ ...defaults(), ledAuto: true });
+  assert.equal(decodeConfig(readback).ledAuto, true);
+  assert.equal(decodeConfig(readback).ledEnabled, false);
+  readback.setUint8(0, 2);
+  assert.throws(() => decodeConfig(readback), /invalida/);
 });
 test("rejects invalid requests before sending, including odd LED current and NaN", () => {
   for (const [field, value, expected] of [
@@ -209,7 +220,7 @@ test("APPLY shows no optimistic success, then displays actual firmware readback 
   for (const packet of samplePackets(6)) sample.notify(packet);
   assert.match(el.sample.textContent, /6 channels/);
   assert.doesNotMatch(el.sample.textContent, /F1 /);
-  await el.stop.click();
+  await el.start.click();
   assert.match(el.status.textContent, /STOPPED/);
   assert.equal(state.config.ledEnabled, true);
   device.gatt.disconnect();
@@ -304,20 +315,18 @@ test("Measurement/Setup navigation retains BLE, acquisition, subscriptions and r
   assert.equal(device.gatt.connected, true);
   assert.equal(el.connection.textContent, "CONNECTED");
   for (const packet of samplePackets(18)) sample.notify(packet);
-  assert.equal(el["summary-sample"].textContent, "#305419896");
-  assert.equal(el["sample-readout"].children.length, 14);
+  assert.match(el.sample.textContent, /#305419896/);
+  assert.equal(el["sample-readout"].children.length, 2);
   await el["nav-measurement"].click();
   assert.equal(el.integration.value, "123");
   assert.equal(writes.length, before);
   assert.equal(el["acquisition-state"].textContent, "RUNNING");
-  assert.equal(el["sample-state"].textContent, "SATURATED");
-  assert.equal(el["sample-state"].dataset.state, "danger");
   assert.equal(el["summary-integration"].textContent, "50.040 ms");
   assert.doesNotMatch(el["sample-readout"].textContent, /VIS_TL_|VIS_BR_/);
   assert.match(el.sample.textContent, /VIS_TL_2/);
   device.gatt.disconnect();
   assert.equal(el.connection.textContent, "DISCONNECTED");
-  assert.equal(el["summary-sample"].textContent, "\u2014");
+  assert.match(el.sample.textContent, /#305419896/);
 });
 test("physical display uses cycle-0 VIS without averaging and distinguishes zero from unavailable", () => {
   const display = physicalReadings({ channels: [["FZ", 0], ["VIS_TL_0", 7], ["VIS_TL_1", 70], ["VIS_TL_2", 700], ["VIS_BR_0", 12]] });
@@ -327,30 +336,121 @@ test("physical display uses cycle-0 VIS without averaging and distinguishes zero
   assert.equal(display.find(c => c.name === "FZ").value, 0);
   assert.equal(display.find(c => c.name === "F1").value, null);
 });
-test("sample badges distinguish valid, saturated, measuring and idle without inventing integration", async () => {
+
+test("AUTO LED is applied and read back as a firmware mode, retained across START/STOP/reconnect", async () => {
+  const { el, state, device, writes } = setup();
+  await el.connect.click();
+  el["led-auto"].checked = true;
+  await el.apply.click();
+  assert.equal(writes.at(-1)[1], 3);
+  assert.equal(writes.at(-1)[5], 2);
+  assert.equal(state.config.ledAuto, true);
+  assert.equal(el["led-auto"].checked, true);
+  assert.equal(el["led-enabled"].disabled, true);
+  assert.match(el.config.textContent, /AUTO/);
+  await el.start.click();
+  await el.start.click();
+  assert.equal(state.config.ledAuto, true);
+  device.gatt.disconnect();
+  await el.connect.click();
+  assert.equal(el["led-auto"].checked, true);
+  device.gatt.disconnect();
+});
+
+test("VIS levels use ADC full scale, TL above BR, keeping last levels on disconnect", async () => {
   const { el, device, sample } = setup();
-  assert.equal(el["sample-state"].textContent, "IDLE");
   await el.connect.click();
   await el.start.click();
-  assert.equal(el["sample-state"].textContent, "MEASURING");
+  for (const packet of samplePackets(18)) sample.notify(packet);
+  const [tl, br] = el["sample-readout"].children;
+  assert.match(tl.textContent, /VIS TL4000 counts/);
+  assert.match(br.textContent, /VIS BR5000 counts/);
+  assert.equal(Number(tl.children[2].children[1].getAttribute("width")), 4000 / 18000 * 100);
+  assert.equal(Number(br.children[2].children[1].getAttribute("width")), 5000 / 18000 * 100);
+  device.gatt.disconnect();
+  assert.match(tl.textContent, /4000 counts/);
+});
+
+test("shared connection and measurement buttons follow confirmed state across views", async () => {
+  const { el, state, status, statusValue, device, writes } = setup();
+  assert.equal(el.connect.textContent, "CONNECT");
+  assert.equal(el.start.textContent, "START");
+  assert.equal(el.start.disabled, true);
+  await el.connect.click();
+  assert.equal(el.connect.textContent, "DISCONNECT");
+  assert.equal(el.connect.disabled, false);
+  await el.start.click();
+  assert.equal(el.start.textContent, "STOP");
+  assert.equal(el.start.disabled, false);
+  state.acquiring = false;
+  status.notify(statusValue());
+  assert.equal(el.start.textContent, "START");
+  await el.start.click();
+  await el["nav-setup"].click();
+  await el.connect.click();
+  assert.equal(new TextDecoder().decode(writes.at(-1)), "STOP");
+  assert.equal(device.gatt.connected, false);
+  assert.equal(el.connect.textContent, "CONNECT");
+  assert.equal(el.start.textContent, "START");
+  assert.equal(el.start.disabled, true);
+  assert.equal(el["setup-view"].hidden, false);
+  assert.doesNotMatch(html, /id="(?:disconnect|stop)"|class="card device-card"/);
+  assert.match(html, /<aside class="sidebar">[\s\S]*?id="nav-measurement"[\s\S]*?<\/aside>/);
+});
+test("measurement settings show confirmed integration, sample gain and LED current without the old summary", async () => {
+  const { el, device, sample } = setup();
+  await el.connect.click();
+  await el.start.click();
   const packets = samplePackets(6, 1);
   packets[0].setUint8(10, 0); // sample header byte 2: no saturation.
   for (const packet of packets) sample.notify(packet);
-  assert.equal(el["sample-state"].textContent, "VALID");
-  assert.equal(el["sample-state"].dataset.state, "success");
   assert.equal(el["summary-gain"].textContent, "64x");
-  await el.stop.click();
+  assert.equal(el["summary-integration"].textContent, "50.040 ms");
+  assert.equal(el["summary-led-current"].textContent, "10 mA");
+  assert.doesNotMatch(html, /id="summary-sample"|id="sample-state"|class="sample-summary"/);
+  await el.start.click();
   assert.equal(el["acquisition-state"].textContent, "IDLE");
   device.gatt.disconnect();
 });
-test("view markup separates editable setup, keeps raw debug collapsed and has no development label", () => {
+test("view markup separates setup and debug and removes the measurement heading", () => {
   const measurement = html.slice(html.indexOf('<div id="measurement-view"'), html.indexOf('<div id="setup-view"'));
   assert.doesNotMatch(measurement, /id="(?:gain|integration|led-current|apply|setup)"/);
   assert.match(html, /href="#\/measurement"/);
   assert.match(html, /href="#\/setup"/);
-  assert.doesNotMatch(html, /<details[^>]*\bopen\b/);
+  assert.match(html, /href="#\/debug"/);
+  assert.match(html, /id="debug-view" hidden/);
+  assert.doesNotMatch(measurement, /measurement-title|debug-log|Technical status|Raw SMUX data/);
+  assert.doesNotMatch(html, /<details/);
   assert.doesNotMatch(html, /HITO\s*4/i);
   assert.doesNotMatch(html, /Chart\.js|<canvas|<svg/);
+});
+
+test("Debug navigation and direct links preserve acquisition and keep receiving samples", async () => {
+  const { el, device, writes, sample, window } = setup({ hash: "#/debug" });
+  assert.equal(el["debug-view"].hidden, false);
+  assert.equal(el["measurement-view"].hidden, true);
+  assert.equal(el["setup-view"].hidden, true);
+  await el.connect.click();
+  await el["nav-measurement"].click();
+  await el.start.click();
+  const before = writes.length;
+  await el["nav-debug"].click();
+  assert.equal(window.location.hash, "#/debug");
+  assert.equal(el["nav-debug"].getAttribute("aria-current"), "page");
+  assert.equal(el["measurement-view"].hidden, true);
+  assert.equal(el["setup-view"].hidden, true);
+  for (const packet of samplePackets(18)) sample.notify(packet);
+  assert.match(el.sample.textContent, /VIS_TL_2/);
+  assert.match(el.sample.textContent, /#305419896/);
+  await el["nav-setup"].click();
+  assert.equal(el["debug-view"].hidden, true);
+  window.location.hash = "#/debug";
+  window.dispatchEvent(new Event("hashchange"));
+  assert.equal(el["debug-view"].hidden, false);
+  assert.equal(writes.length, before);
+  assert.equal(device.gatt.connected, true);
+  assert.equal(el.start.textContent, "STOP");
+  device.gatt.disconnect();
 });
 
 test("direct Setup links and hash history preserve the same session and skip links do not change view", async () => {

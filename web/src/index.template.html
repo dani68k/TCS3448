@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -15,42 +15,36 @@
   <header class="instrument-header">
     <div class="header-inner">
       <div class="brand"><img class="brand-mark" src="{{LOGO}}" alt="" width="32" height="32"><div><strong>TCS3448</strong><span>SPECTRAL SENSOR</span></div></div>
+      <div class="header-connection">
+        <span id="device-name" class="header-device">TCS3448</span>
+        <span id="connection" class="status-badge connection-badge" data-state="muted" role="status">DISCONNECTED</span>
+        <button id="connect" class="button button-secondary">CONNECT</button>
+      </div>
+    </div>
+  </header>
+  <div class="app-layout">
+    <aside class="sidebar">
       <nav class="main-nav" aria-label="Main navigation">
         <a id="nav-measurement" href="#/measurement" aria-current="page">Measurement</a>
         <a id="nav-setup" href="#/setup" aria-current="false">Setup</a>
+        <a id="nav-debug" href="#/debug" aria-current="false">Advanced / Raw Debug</a>
       </nav>
-      <span id="connection" class="status-badge connection-badge" data-state="muted" role="status">DISCONNECTED</span>
-    </div>
-  </header>
+    </aside>
   <main id="main-content" class="instrument-main" tabindex="-1">
     <div id="measurement-view">
-      <div class="page-heading"><div><p class="eyebrow">MEASUREMENT</p><h1 id="measurement-title">Spectral measurement</h1></div><p class="page-caption">Raw ADC channel readout</p></div>
-      <section class="card device-card" aria-labelledby="device-title">
-        <div class="device-layout">
-          <div><p id="device-title" class="label">Device</p><h2 id="device-name" class="device-name">TCS3448</h2><p class="device-interface"><span class="interface-icon" aria-hidden="true">↔</span> Web Bluetooth</p></div>
-          <div class="acquisition-block"><p class="label">Acquisition status</p><span id="acquisition-state" class="status-badge" data-state="muted" role="status">IDLE</span></div>
-          <div class="actions device-actions">
-            <button id="connect" class="button button-secondary"><span aria-hidden="true">↗</span> CONNECT</button>
-            <button id="start" class="button button-primary" disabled><span aria-hidden="true">▶</span> START</button>
-            <button id="stop" class="button button-stop" disabled><span aria-hidden="true">■</span> STOP</button>
-            <button id="disconnect" class="button button-quiet" disabled>Disconnect</button>
-          </div>
-        </div>
-        <p id="support" class="support-note"></p>
+      <section class="card measurement-card" aria-label="Spectral RAW counts">
+        <div class="card-heading"><div id="spectral-extrema" class="chart-extrema" aria-label="Current sample maximum and minimum"></div><dl class="measurement-settings" aria-label="Measurement settings"><div><dt>Integration time</dt><dd id="summary-integration">—</dd></div><div><dt>Gain</dt><dd id="summary-gain">—</dd></div><div><dt>Current LED</dt><dd id="summary-led-current">—</dd></div></dl><div class="measurement-actions"><span id="acquisition-state" class="status-badge" data-state="muted" role="status">IDLE</span><button id="start" class="button button-primary" disabled>START</button></div></div>
+        <div id="spectral-chart" class="spectral-chart"></div>
       </section>
-      <section class="card measurement-card" aria-labelledby="readout-title">
-        <div class="card-heading"><div><p class="eyebrow">SPECTRAL MEASUREMENT</p><h2 id="readout-title">Latest sample</h2></div><span id="frame-label" class="frame-label">Waiting for a sample</span></div>
-        <div class="readout-labels" aria-hidden="true"><span>CHANNEL</span><span>COUNTS</span><span>CHANNEL</span><span>COUNTS</span></div>
-        <dl id="sample-readout" class="channel-grid" aria-label="Physical channel counts"></dl>
+      <section class="card vis-card" aria-labelledby="vis-title">
+        <h2 id="vis-title" class="eyebrow">BROADBAND VIS</h2>
+        <dl id="sample-readout" class="vis-readout" aria-label="Broadband VIS counts"></dl>
         <p class="readout-note">— Not acquired in the current mode</p>
-      </section>
-      <section class="sample-summary" aria-label="Latest sample summary">
-        <dl><div><dt>Sample</dt><dd id="summary-sample">—</dd></div><div><dt>Gain</dt><dd id="summary-gain">—</dd></div><div><dt>Integration</dt><dd id="summary-integration">—</dd></div><div><dt>Status</dt><dd><span id="sample-state" class="status-badge" data-state="muted" role="status">IDLE</span></dd></div></dl>
       </section>
     </div>
     <div id="setup-view" hidden>
       <div class="page-heading"><div><p class="eyebrow">SETUP</p><h1 id="setup-title">Sensor configuration</h1></div><p class="page-caption">Device settings &amp; confirmed values</p></div>
-      <p id="setup-disconnected" class="notice">Connect the sensor from <a id="setup-connect-link" href="#/measurement">Measurement</a> to read and edit its settings.</p>
+      <p id="setup-disconnected" class="notice">Use CONNECT in the header to read and edit sensor settings. <a id="setup-connect-link" href="#/measurement">Go to Measurement</a>.</p>
       <div class="setup-layout">
         <section class="card setup-card" aria-labelledby="requested-title">
           <div class="card-heading"><div><p class="eyebrow">REQUESTED CONFIGURATION</p><h2 id="requested-title">Sensor setup</h2></div><span class="read-only-label">EDITABLE</span></div>
@@ -61,6 +55,7 @@
               <label for="integration">Integration time<div class="input-with-unit"><input id="integration" type="number" min="0.006" step="any" required aria-describedby="integration-unit"><span id="integration-unit" class="input-unit">ms</span></div></label>
               <label for="led-current">LED current<div class="input-with-unit"><input id="led-current" type="number" min="4" max="258" step="2" required aria-describedby="led-current-unit"><span id="led-current-unit" class="input-unit">mA</span></div></label>
               <div class="led-field"><span class="label">LED</span><label class="switch" for="led-enabled"><input id="led-enabled" type="checkbox" aria-label="LED enabled"><span class="switch-track" aria-hidden="true"></span><output id="led-label" for="led-enabled">OFF</output></label></div>
+              <label class="led-auto-field" for="led-auto"><span>LED AUTO</span><span><input id="led-auto" type="checkbox"> With measurement (START / STOP)</span></label>
               <label for="smux">Auto SMUX<select id="smux"><option value="6">6 channels</option><option value="12">12 channels</option><option value="18">18 channels</option></select></label>
               <label for="autozero">Autozero<select id="autozero"><option value="1">Before first measurement</option><option value="2">Every measurement</option><option value="0">Disabled</option></select></label>
               <label for="period">Sample period<div class="input-with-unit"><input id="period" type="number" min="1" max="2147483647" step="1" required aria-describedby="period-unit"><span id="period-unit" class="input-unit">ms</span></div></label>
@@ -76,17 +71,19 @@
         </section>
       </div>
     </div>
+    <p id="support" class="support-note"></p>
     <p id="message" class="message" role="alert"></p>
-    <details id="advanced-debug" class="advanced-debug">
-      <summary>Advanced / Raw Debug <span class="debug-caption">SMUX data &amp; device diagnostics</span></summary>
+    <section id="debug-view" hidden aria-labelledby="debug-title">
+      <div class="page-heading"><h1 id="debug-title">Advanced / Raw Debug</h1><p class="page-caption">SMUX data &amp; device diagnostics</p></div>
       <div class="debug-content">
         <div><h2>Raw SMUX data</h2><pre id="sample">No sample received</pre><p id="received" class="hint">0 complete samples received</p></div>
         <div><h2>Technical status</h2><pre id="status">No device status</pre></div>
         <div class="debug-log-section"><h2>BLE messages</h2><pre id="debug-log" aria-label="Recent BLE events"></pre></div>
       </div>
-    </details>
+    </section>
     <footer class="instrument-footer"><span>TCS3448 · SPECTRAL SENSOR</span><span>Web Bluetooth interface</span></footer>
   </main>
+  </div>
   <script>
 {{SCRIPT}}
   </script>

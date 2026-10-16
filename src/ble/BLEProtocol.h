@@ -12,7 +12,7 @@ constexpr char CommandUUID[] = "34480003-7f2a-4f6c-9e31-8dbe0c2f5a70";
 constexpr char SampleUUID[] = "34480004-7f2a-4f6c-9e31-8dbe0c2f5a70";
 constexpr char ConfigUUID[] = "34480005-7f2a-4f6c-9e31-8dbe0c2f5a70";
 constexpr uint8_t Version = 1;
-constexpr uint8_t ConfigVersion = 2;
+constexpr uint8_t ConfigVersion = 3;
 constexpr uint8_t ApplyTag = 0xa4;
 constexpr size_t PacketSize = 20;
 constexpr size_t SampleSize = 48;
@@ -46,12 +46,13 @@ inline uint32_t Get32(const uint8_t* in) {
   return uint32_t(in[0]) | (uint32_t(in[1]) << 8) | (uint32_t(in[2]) << 16) | (uint32_t(in[3]) << 24);
 }
 inline bool DecodeApply(const uint8_t* packet, size_t size, TCS3448Config& config) {
-  if (size != PacketSize || packet[0] != ApplyTag || packet[1] != ConfigVersion ||
-      packet[5] > 1 || Get32(packet + 16) != 0) return false;
+  if (size != PacketSize || packet[0] != ApplyTag || (packet[1] != 2 && packet[1] != ConfigVersion) ||
+      packet[5] > (packet[1] == 2 ? 1 : 2) || Get32(packet + 16) != 0) return false;
   config.gain = static_cast<TCS3448Gain>(packet[2]);
   config.smux = static_cast<TCS3448SmuxMode>(packet[3]);
   config.autozero = static_cast<TCS3448AutoZeroMode>(packet[4]);
-  config.ledEnabled = packet[5] != 0;
+  config.ledEnabled = packet[5] == 1;
+  config.ledAuto = packet[5] == 2;
   config.ledCurrent = Get16(packet + 6);
   config.integrationMs = Get32(packet + 8) / 1000.0;
   config.sampleIntervalMs = Get32(packet + 12);

@@ -88,12 +88,13 @@ test("connect, configuration, START, STOP and reconnect work through application
   assert.equal(el.start.disabled, false);
   await el.start.click();
   assert.equal(state.acquiring, true);
-  assert.equal(el.start.disabled, true);
+  assert.equal(el.start.disabled, false);
+  assert.equal(el.start.textContent, "STOP");
   assert.match(el.status.textContent, /RUNNING/);
-  await el.stop.click();
+  await el.start.click();
   assert.equal(state.acquiring, false);
   await el.start.click();
-  await el.disconnect.click();
+  await el.connect.click();
   assert.equal(writes.at(-1), "STOP");
   assert.equal(device.gatt.connected, false);
   assert.equal(el.start.disabled, true);
@@ -109,7 +110,7 @@ test("unexpected disconnect clears controls and old configuration", async () => 
   await el.start.click();
   device.gatt.disconnect();
   assert.equal(el.start.disabled, true);
-  assert.equal(el.stop.disabled, true);
+  assert.equal(el.start.disabled, true);
   assert.equal(el.connect.disabled, false);
   assert.match(el.config.textContent, /Gain/);
 });
@@ -137,7 +138,7 @@ test("sensor errors are shown and do not leave buttons locked", async () => {
   state.ready = false;
   await el.start.click();
   assert.match(el["debug-log"].textContent, /INITIALIZATION_FAILED/);
-  assert.equal(el.disconnect.disabled, false);
+  assert.equal(el.connect.disabled, false);
   assert.equal(el.start.disabled, true);
   device.gatt.disconnect();
 });

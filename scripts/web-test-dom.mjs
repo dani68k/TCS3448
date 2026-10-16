@@ -22,7 +22,7 @@ class TestElement {
 export function createTestDOM(html, hash = "") {
   const elements = new Map([...html.matchAll(/id="([^"]+)"/g)].map(match => [match[1], new TestElement()]));
   const el = new Proxy({}, { get: (_, id) => elements.get(id) });
-  const document = { title: "", getElementById: id => elements.get(id) ?? null, createElement: tag => new TestElement(tag) };
+  const document = { title: "", getElementById: id => elements.get(id) ?? null, createElementNS: (_, tag) => new TestElement(tag), createElement: tag => new TestElement(tag) };
   const window = new EventTarget();
   window.isSecureContext = true;
   window.location = { hash };

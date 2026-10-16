@@ -1,0 +1,1064 @@
+Proyecto:
+Aplicación web BLE para control y lectura del sensor TCS3448 sobre ESP32.
+
+Entorno:
+- ESP32
+- PlatformIO
+- Arduino framework
+- VSCode
+- Web Bluetooth
+- TCS3448Manager implementado
+- BLE Web funcional
+- Dark mode ya aplicado
+- Vista Measurement y vista Setup separadas visualmente
+- Adquisición RAW del TCS3448 funcionando
+- Los canales se reciben correctamente desde el ESP32
+
+IMPORTANTE:
+NO debe aparecer ninguna referencia a "ATLANTES" en:
+- código
+- comentarios
+- documentación
+- UI
+- nombres de clases
+- nombres de variables
+- nombres de módulos
+- textos visibles
+
+==================================================
+HITO 5A.1 — HISTOGRAMA RAW
+==================================================
+
+OBJETIVO
+
+Añadir a la vista Measurement un histograma espectral RAW del TCS3448.
+
+Este hito se limita exclusivamente a:
+- representación gráfica de los canales espectrales
+- usando valores RAW ADC
+- sin calibración
+- sin normalización
+- sin ADC %
+- sin transmitancia
+- sin absorbancia
+- sin CSV
+- sin almacenamiento
+- sin data logging
+- sin análisis temporal
+
+El objetivo es dejar muy pulida la visualización RAW.
+
+==================================================
+1. PRINCIPIO GENERAL
+==================================================
+
+La gráfica debe representar únicamente los canales espectrales principales del TCS3448:
+
+F1
+F2
+FZ
+F3
+F4
+F5
+FY
+FXL
+F6
+F7
+F8
+NIR
+
+Ordenados por longitud de onda creciente.
+
+Usar estas longitudes de onda centrales:
+
+F1   407 nm
+F2   424 nm
+FZ   450 nm
+F3   473 nm
+F4   516 nm
+F5   546 nm
+FY   560 nm
+FXL  596 nm
+F6   636 nm
+F7   687 nm
+F8   748 nm
+NIR  855 nm
+
+NO incluir VIS TL ni VIS BR dentro del histograma espectral principal.
+
+VIS TL / VIS BR deben mostrarse aparte.
+
+==================================================
+2. UBICACIÓN EN LA UI
+==================================================
+
+En la vista Measurement:
+
+- mantener el header actual
+- mantener Device / Connection / Start / Stop
+- mantener estado general
+- sustituir o complementar la actual lista textual de canales con una card principal:
+
+SPECTRAL MEASUREMENT
+
+Dentro:
+- histograma RAW
+- valores actualizados en tiempo real
+- leyenda/labels limpios
+- tooltip interactivo
+
+Debajo:
+- resumen de muestra
+- VIS TL / VIS BR
+- opcionalmente Advanced Debug colapsable
+
+==================================================
+3. TECNOLOGÍA DE GRÁFICA
+==================================================
+
+Preferencia:
+usar SVG propio + JavaScript.
+
+NO añadir Chart.js, Plotly, D3 u otra librería externa salvo que ya exista en el proyecto.
+
+Motivos:
+- 12 barras únicamente
+- control completo
+- poco peso
+- fácil integración
+- fácil uso en entorno embebido
+- mejor control visual
+
+Crear un componente o módulo específico para la gráfica.
+
+Ejemplo conceptual:
+
+SpectralChart.js
+
+Responsabilidades:
+- inicializar
+- actualizar datos
+- escalar
+- dibujar barras
+- dibujar ejes
+- dibujar labels
+- mostrar tooltip
+- responder a resize
+- seleccionar barra si aplica
+
+No mezclar código BLE con código de render.
+
+==================================================
+4. DATOS DE ENTRADA
+==================================================
+
+El histograma debe alimentarse desde la estructura de muestra ya recibida por BLE.
+
+No crear un segundo flujo de datos.
+
+Reutilizar la última muestra ya procesada.
+
+Conceptualmente:
+
+sample.f1
+sample.f2
+sample.fz
+sample.f3
+sample.f4
+sample.f5
+sample.fy
+sample.fxl
+sample.f6
+sample.f7
+sample.f8
+sample.nir
+
+Crear internamente una definición centralizada:
+
+[
+  { key: "f1",  label: "F1",  wavelength: 407 },
+  { key: "f2",  label: "F2",  wavelength: 424 },
+  { key: "fz",  label: "FZ",  wavelength: 450 },
+  ...
+]
+
+No repetir hardcoded mapping en varios lugares.
+
+==================================================
+5. EJE X
+==================================================
+
+El eje X debe mostrar los canales en orden espectral.
+
+Cada barra debe mostrar:
+
+línea 1:
+F1
+
+línea 2:
+407 nm
+
+Ejemplo:
+
+F1
+407
+
+F2
+424
+
+FZ
+450
+
+...
+
+NIR
+855
+
+No intentar posicionar físicamente las barras con separación proporcional exacta a la longitud de onda en este hito.
+
+Usar barras equidistantes.
+
+El objetivo es:
+claridad y lectura.
+
+==================================================
+6. EJE Y
+==================================================
+
+El eje Y representa:
+
+RAW ADC COUNTS
+
+Título:
+
+Counts
+
+o:
+
+ADC Counts
+
+Escala dinámica.
+
+Ejemplo:
+
+si máximo actual = 1053
+
+usar eje hasta algo razonable como:
+
+0
+250
+500
+750
+1000
+1250
+
+No usar exactamente el máximo como tope.
+
+Añadir margen visual.
+
+Implementar una función para calcular un "nice max".
+
+Ejemplo:
+- buscar máximo actual
+- añadir 10-20%
+- redondear a valor legible
+
+Ejemplos:
+1053 -> 1200 o 1250
+17998 -> 20000
+32800 -> 35000 o 40000
+
+No usar escala logarítmica.
+
+==================================================
+7. COMPORTAMIENTO DEL EJE Y EN TIEMPO REAL
+==================================================
+
+Evitar que el eje Y cambie continuamente en cada muestra de forma molesta.
+
+Implementar histéresis o retardo.
+
+Opciones válidas:
+
+- subir inmediatamente si el nuevo máximo excede el rango
+- bajar solo si durante N muestras el nivel queda claramente por debajo
+
+Ejemplo conceptual:
+
+increase:
+instant
+
+decrease:
+after 20 stable samples
+
+o equivalente.
+
+La gráfica debe ser visualmente estable.
+
+==================================================
+8. BARRAS
+==================================================
+
+12 barras.
+
+Aspecto:
+- ancho consistente
+- esquinas ligeramente redondeadas
+- separación uniforme
+- animación suave opcional
+- transición de altura 100-200 ms
+
+No usar animaciones pesadas.
+
+Mantener 60 fps razonables.
+
+==================================================
+9. COLORES DE BARRAS
+==================================================
+
+Usar una paleta espectral moderada.
+
+No debe parecer gaming/neón.
+
+Colores sugeridos por banda:
+
+F1  407 nm -> violeta
+F2  424 nm -> azul-violeta
+FZ  450 nm -> azul
+F3  473 nm -> cyan/azul claro
+F4  516 nm -> verde-cyan
+F5  546 nm -> verde
+FY  560 nm -> verde-amarillo
+FXL 596 nm -> amarillo
+F6  636 nm -> naranja
+F7  687 nm -> rojo
+F8  748 nm -> rojo oscuro / deep red
+NIR 855 nm -> gris-magenta / neutral dark accent
+
+Mantener saturación moderada.
+
+No usar glow excesivo.
+
+Opcional:
+barra con fill sólido + pequeño gradient vertical suave.
+
+==================================================
+10. TOOLTIP
+==================================================
+
+Al pasar el ratón sobre una barra:
+
+mostrar tooltip:
+
+F6
+636 nm
+719 counts
+
+Ejemplo:
+
+Channel: F6
+Peak: 636 nm
+RAW: 719 counts
+
+El tooltip debe:
+- seguir la estética dark mode
+- no salir fuera de pantalla
+- actualizarse con datos actuales
+
+En tablet / touch:
+tap puede mostrar el tooltip.
+
+==================================================
+11. SELECCIÓN DE CANAL
+==================================================
+
+Opcional pero recomendable:
+
+permitir click/tap sobre una barra.
+
+Mantener selectedChannel.
+
+Mostrar debajo:
+
+Selected Channel
+F6 · 636 nm
+719 counts
+
+La selección debe persistir mientras llegan muestras.
+
+No usar esta selección todavía para ninguna lógica de análisis.
+
+Solo UI.
+
+==================================================
+12. VIS TL / VIS BR
+==================================================
+
+Mostrar fuera del histograma.
+
+Crear una pequeña card:
+
+BROADBAND VIS
+
+VIS TL
+1282 counts
+
+VIS BR
+17998 counts
+
+Pueden tener pequeñas barras horizontales de nivel si queda bien.
+
+NO mezclarlos con los canales espectrales.
+
+==================================================
+13. INFORMACIÓN DE LA MUESTRA
+==================================================
+
+Mantener visible:
+
+Sample
+#63
+
+Gain
+64x
+
+Integration
+50.0 ms
+
+Status
+VALID
+
+Si hay saturación:
+SATURATED
+
+No introducir todavía ADC Full Scale en la gráfica.
+
+Puede seguir mostrándose donde ya exista.
+
+==================================================
+14. ESTADO SIN DATOS
+==================================================
+
+Antes de recibir la primera muestra:
+
+mostrar dentro del gráfico:
+
+Waiting for data...
+
+o:
+
+No spectral data yet
+
+No mostrar barras con valores falsos.
+
+==================================================
+15. ESTADO DESCONECTADO
+==================================================
+
+Si BLE se desconecta:
+
+mantener última muestra visible
+pero mostrar:
+
+DISCONNECTED
+
+No borrar necesariamente la gráfica.
+
+Opcional:
+reducir opacidad o marcar "Last sample".
+
+No simular datos.
+
+==================================================
+16. ESTADO STOPPED
+==================================================
+
+Si la adquisición se detiene:
+
+mantener última muestra.
+
+Mostrar:
+
+IDLE
+
+o:
+
+STOPPED
+
+La gráfica no debe desaparecer.
+
+==================================================
+17. SATURACIÓN
+==================================================
+
+Si la muestra recibida indica saturación:
+
+- mostrar estado SATURATED
+- usar rojo en badge/status
+
+NO modificar los valores RAW.
+
+NO recortar barras manualmente.
+
+La gráfica debe mostrar los counts recibidos.
+
+Si existe analog saturation o digital saturation diferenciada:
+mostrarlo en Advanced Debug o en tooltip de status.
+
+==================================================
+18. RESPONSIVE
+==================================================
+
+La gráfica debe adaptarse al ancho de la card.
+
+Desktop:
+12 barras con labels completos.
+
+Tablet:
+mantener 12 barras.
+
+Pantallas pequeñas:
+reducir font-size y separación.
+
+No ocultar canales.
+
+Usar ResizeObserver si conviene.
+
+==================================================
+19. ACCESIBILIDAD
+==================================================
+
+No depender únicamente de colores.
+
+Cada barra debe tener:
+- label
+- valor
+- tooltip
+
+Mantener buen contraste.
+
+SVG:
+añadir title/aria-label si resulta razonable.
+
+==================================================
+20. PERFORMANCE
+==================================================
+
+Las muestras pueden llegar periódicamente.
+
+Evitar:
+- recrear todo el DOM en cada actualización
+- crear un SVG nuevo en cada muestra
+- memory leaks
+- listeners repetidos
+
+Inicializar una vez.
+
+Después:
+actualizar atributos:
+- height
+- y
+- text
+- tooltip data
+
+==================================================
+21. ARQUITECTURA JAVASCRIPT
+==================================================
+
+Separar responsabilidades.
+
+Ejemplo:
+
+app.js
+- BLE
+- routing/views
+- datos globales
+
+SpectralChart.js
+- render visual
+
+No es obligatorio ese nombre exacto.
+
+Pero NO meter cientos de líneas de SVG dentro del handler BLE.
+
+Conceptualmente:
+
+onSample(sample) {
+    updateMeasurementInfo(sample);
+    spectralChart.update(sample);
+}
+
+==================================================
+22. CSS
+==================================================
+
+Añadir estilos coherentes con el dark mode actual.
+
+Usar variables existentes.
+
+No crear una segunda paleta.
+
+Clases conceptuales:
+
+.spectral-card
+.spectral-chart
+.chart-axis
+.chart-grid
+.chart-bar
+.chart-label
+.chart-tooltip
+.channel-selected
+.vis-card
+
+No duplicar estilos inline innecesariamente.
+
+==================================================
+23. ADVANCED DEBUG
+==================================================
+
+Mantener la información RAW de 18 resultados SMUX si ya existe.
+
+Pero moverla a:
+
+Advanced Debug
+
+colapsable.
+
+Por defecto:
+cerrado.
+
+La vista principal debe ser limpia.
+
+==================================================
+24. NO IMPLEMENTAR ADC %
+==================================================
+
+Muy importante.
+
+En este hito SOLO RAW.
+
+No añadir:
+- ADC %
+- normalized
+- max=100
+- auto exposure
+- calibration
+- corrections
+
+Puede dejarse preparado un selector visual de modo si ya tiene sentido, pero solo debe existir:
+
+RAW
+
+Preferencia:
+ni siquiera mostrar selector todavía.
+
+Implementarlo en Hito 5A.2.
+
+==================================================
+25. NO IMPLEMENTAR CALIBRACIÓN
+==================================================
+
+No añadir:
+
+- dark correction
+- reference correction
+- transmittance
+- absorbance
+- spectral calibration
+- responsivity correction
+
+RAW significa:
+valor ADC recibido.
+
+==================================================
+26. NO IMPLEMENTAR CSV
+==================================================
+
+NO crear todavía:
+
+- Data tab
+- flash storage
+- CSV
+- logging
+- download
+- sessions
+
+Eso se implementará después de cerrar la visualización.
+
+==================================================
+27. HEADER / NAV
+==================================================
+
+Mantener:
+
+Measurement
+Setup
+
+NO añadir todavía Data.
+
+La tercera pestaña Data se añadirá en el hito de CSV.
+
+==================================================
+28. ASPECTO VISUAL
+==================================================
+
+Mantener el estilo instrumental device dark mode ya aplicado.
+
+La gráfica debe quedar integrada.
+
+No parecer:
+- gráfico pegado de librería externa
+- dashboard financiero
+- chart genérico
+
+Debe parecer:
+parte nativa del instrumento.
+
+==================================================
+29. DISEÑO DE REFERENCIA
+==================================================
+
+Layout conceptual:
+
+--------------------------------------------------
+TCS3448  SPECTRAL SENSOR
+
+Measurement      Setup             ● CONNECTED
+--------------------------------------------------
+
+DEVICE
+
+TCS3448
+Web Bluetooth
+
+Acquisition
+● RUNNING
+
+[ CONNECT ] [ START ] [ STOP ]
+
+--------------------------------------------------
+
+SPECTRAL MEASUREMENT
+
+ADC Counts
+
+1200 |                     █
+1000 |                █    █
+ 800 |           █    █    █
+ 600 |      █    █    █    █
+ 400 |  █   █    █    █    █
+ 200 |  █   █    █    █    █
+   0 +--------------------------------------
+      F1 F2 FZ F3 F4 F5 FY FXL F6 F7 F8 NIR
+     407 424 450 ...
+
+--------------------------------------------------
+
+BROADBAND VIS
+
+VIS TL          1282
+VIS BR         17998
+
+--------------------------------------------------
+
+Sample #63
+Gain 64x
+Integration 50.0 ms
+● VALID
+
+--------------------------------------------------
+
+==================================================
+30. DATOS REALES
+==================================================
+
+No generar valores fake.
+
+El histograma debe usar únicamente:
+datos recibidos por BLE.
+
+No implementar demo data en producción.
+
+Si existe un modo debug/test actual:
+puede mantenerse claramente separado.
+
+==================================================
+31. DOCUMENTACIÓN GLOBAL
+==================================================
+
+Actualizar:
+
+ARCHITECTURE.md
+
+Añadir:
+- Spectral Measurement chart
+- canales representados
+- orden espectral
+- separación VIS
+- flujo sample -> UI -> SpectralChart
+- arquitectura del componente gráfico
+
+No mencionar calibración como funcionalidad implementada.
+
+Puede aparecer únicamente en roadmap si ya existe.
+
+==================================================
+32. DOCUMENTACIÓN DEL FRONTEND
+==================================================
+
+Actualizar README.md del módulo web.
+
+Documentar:
+- SpectralChart
+- entrada de datos
+- mapping de canales
+- wavelengths
+- scaling
+- tooltip
+- resize
+- selection
+- estados
+
+==================================================
+33. README DEL MÓDULO GRÁFICO
+==================================================
+
+Si se crea un folder nuevo para el componente gráfico:
+
+crear README.md.
+
+Si solo se crea SpectralChart.js dentro del módulo web existente:
+no crear documentación redundante.
+
+Actualizar el README existente.
+
+==================================================
+34. COMMENTS
+==================================================
+
+Comentar únicamente:
+- algoritmo de nice scale
+- histéresis de escala
+- mapping espectral
+- decisiones no evidentes
+
+No sobrecomentar código trivial.
+
+==================================================
+35. TEST FUNCIONAL
+==================================================
+
+Probar:
+
+1. conectar BLE
+2. START
+3. recibir muestras
+4. gráfica aparece
+5. 12 barras correctas
+6. valores coinciden con RAW recibido
+7. labels correctos
+8. longitudes de onda correctas
+9. tooltip correcto
+10. cambio de muestras actualiza barras
+11. STOP mantiene última muestra
+12. desconectar no rompe UI
+13. reconectar vuelve a actualizar
+14. Setup sigue funcionando
+15. Apply Configuration sigue funcionando
+16. cambiar Gain altera visualmente los RAW recibidos
+17. cambiar Integration altera visualmente los RAW recibidos
+
+==================================================
+36. TEST DE MAPPING
+==================================================
+
+Verificar explícitamente que:
+
+F1 recibido -> barra F1
+F2 -> F2
+FZ -> FZ
+F3 -> F3
+F4 -> F4
+F5 -> F5
+FY -> FY
+FXL -> FXL
+F6 -> F6
+F7 -> F7
+F8 -> F8
+NIR -> NIR
+
+No asumir orden de objeto JSON.
+
+Usar las keys.
+
+==================================================
+37. TEST VIS
+==================================================
+
+Verificar:
+
+VIS TL
+VIS BR
+
+No entran en histogram.
+
+No mostrar 6 VIS del auto-SMUX principal.
+
+Si internamente se reciben:
+VIS_TL_0
+VIS_BR_0
+VIS_TL_1
+VIS_BR_1
+VIS_TL_2
+VIS_BR_2
+
+mantener mapping existente.
+
+Vista principal:
+solo VIS TL y VIS BR consolidados según la lógica actual.
+
+RAW completo:
+Advanced Debug.
+
+==================================================
+38. PLATFORMIO
+==================================================
+
+Si el frontend está embebido en firmware:
+
+- recompilar PlatformIO
+- comprobar tamaño
+- comprobar que assets se incluyen correctamente
+- no introducir dependencias excesivas
+
+Si los assets están en filesystem:
+verificar build/upload correspondiente.
+
+No asumir estructura:
+inspeccionar proyecto real.
+
+==================================================
+39. CRITERIOS DE CIERRE
+==================================================
+
+Hito 5A.1 se considera terminado cuando:
+
+- hay histograma RAW funcional
+- 12 canales espectrales
+- orden correcto
+- wavelengths visibles
+- escala Y dinámica y estable
+- tooltip funcional
+- responsive
+- dark mode integrado
+- VIS separado
+- última muestra visible
+- saturación visible
+- Advanced Debug sigue disponible
+- BLE sigue funcionando
+- Setup sigue funcionando
+- no hay calibración
+- no hay ADC %
+- no hay CSV
+- documentación actualizada
+- PlatformIO compila
+- no hay errores JS importantes
+
+==================================================
+40. PROCEDIMIENTO DE TRABAJO
+==================================================
+
+PASO 1
+Analizar frontend actual.
+
+PASO 2
+Identificar formato real de las muestras BLE.
+
+PASO 3
+Mostrar brevemente:
+- archivos a modificar
+- componente gráfico propuesto
+- mapping real de canales
+
+PASO 4
+Crear definición centralizada de canales.
+
+PASO 5
+Implementar SVG.
+
+PASO 6
+Implementar barras.
+
+PASO 7
+Implementar labels.
+
+PASO 8
+Implementar eje Y.
+
+PASO 9
+Implementar nice scale + estabilidad.
+
+PASO 10
+Implementar actualización de muestras.
+
+PASO 11
+Implementar tooltip.
+
+PASO 12
+Implementar VIS separado.
+
+PASO 13
+Mover RAW completo a Advanced Debug.
+
+PASO 14
+Probar responsive.
+
+PASO 15
+Probar BLE completo.
+
+PASO 16
+Actualizar ARCHITECTURE.md.
+
+PASO 17
+Actualizar README del frontend.
+
+PASO 18
+Compilar/verificar proyecto.
+
+PASO 19
+Mostrar resumen final:
+- archivos modificados
+- arquitectura
+- mapping
+- comportamiento de escala
+- cómo probar
+- limitaciones actuales
+
+==================================================
+41. RESULTADO FINAL ESPERADO
+==================================================
+
+Al finalizar:
+
+1. abro Measurement
+2. conecto BLE
+3. START
+4. recibo muestras
+5. aparece histograma RAW
+6. veo F1...NIR ordenados
+7. veo wavelength de cada canal
+8. veo counts reales
+9. paso ratón y veo tooltip
+10. VIS aparece aparte
+11. Gain/Integration/Status siguen visibles
+12. STOP mantiene la última captura
+13. Setup sigue funcionando
+
+Priorizar:
+- precisión del mapping
+- claridad visual
+- estabilidad gráfica
+- rendimiento
+- aspecto de instrumento científico
+- simplicidad
+- no introducir calibración prematuramente

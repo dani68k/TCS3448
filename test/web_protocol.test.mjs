@@ -33,7 +33,7 @@ test("decodes status and acknowledgment in little-endian order", () => {
 });
 test("decodes default configuration and integration in milliseconds", () => {
   const config = decodeConfig(view([2, 7, 18, 1, 0, 1, 10, 0, 0x78, 0xc3, 0, 0, 0xf4, 1, 0, 0, 0x50, 0x46, 1, 0]));
-  assert.deepEqual(config, { gainCode: 7, gain: 64, smux: 18, autozero: 1, ledEnabled: false, valid: true, ledCurrentMa: 10, integrationMs: 50.04, intervalMs: 500, adcFullScale: 18000, revision: 1 });
+  assert.deepEqual(config, { gainCode: 7, gain: 64, smux: 18, autozero: 1, ledEnabled: false, ledAuto: false, valid: true, ledCurrentMa: 10, integrationMs: 50.04, intervalMs: 500, adcFullScale: 18000, revision: 1 });
 });
 test("reassembles exactly one coherent sample and preserves all channel indices", () => {
   const assembler = new SampleAssembler();
