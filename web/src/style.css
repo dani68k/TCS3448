@@ -230,3 +230,94 @@ input:disabled, select:disabled, fieldset:disabled .switch { opacity: .45; curso
 }
 
 .chart-near-sat { fill: #ffc247; color: #ffc247; }
+
+dialog { color:var(--text, #dce5eb); background:var(--surface, #161e27); border:1px solid #43515e; border-radius:10px; max-width:540px; width:90%; padding:24px; }
+dialog::backdrop { background:#000a; }
+dialog input { width:100%; margin:10px 0 20px; }
+.data-table { overflow-x:auto; margin-top:16px; }
+.data-table table { width:100%; border-collapse:collapse; font-size:13px; }
+.data-table th,.data-table td { padding:9px; text-align:left; border-bottom:1px solid #33404b; }
+.data-table td:nth-child(3) { max-width:220px; overflow-wrap:anywhere; }
+
+/* Fit the instrument to the available height; keep long lists inside their panel. */
+.data-list-card, .saved-record-card { padding: 16px; min-width: 0; }
+.data-list-card .measurement-actions { flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
+.data-list-card .card-heading { margin-bottom: 8px; }
+#data-status { font-size: 12px; color: var(--text-secondary); margin-top: 8px; overflow-wrap: anywhere; }
+.saved-record-card { margin-top: 14px; }
+.saved-record-card h2 { overflow-wrap: anywhere; }
+.saved-record-card .hint { margin: 6px 0; }
+.data-table thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-panel); }
+dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+
+@media (min-width: 960px) and (min-height: 560px) {
+  .header-inner { min-height: 60px; padding: 8px 20px; }
+  .app-layout { grid-template-columns: 145px minmax(0, 1fr); }
+  .sidebar { padding: 14px 0; }
+  .main-nav { gap: 4px; }
+  .main-nav a { padding: 10px 12px; font-size: 12px; }
+  .instrument-main { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; }
+  #measurement-view, #setup-view, #debug-view { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .instrument-footer { flex-shrink: 0; margin-top: 0; padding-top: 6px; }
+  .support-note, .message { flex-shrink: 0; margin-top: 0; }
+  .message { padding: 8px 12px; max-height: 20vh; overflow-y: auto; }
+  .page-heading { flex-shrink: 0; margin-bottom: 10px; gap: 12px; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 16px; }
+  .eyebrow { margin-bottom: 4px; }
+  .button { min-height: 32px; padding: 6px 12px; }
+  .measurement-card, .setup-card, .active-card { padding: clamp(10px, 1.8vh, 18px); }
+  .card-heading { gap: 12px; margin-bottom: 12px; }
+  .measurement-card { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .measurement-card .card-heading { flex-shrink: 0; }
+  .measurement-settings { gap: 18px; }
+  .measurement-settings dd { font-size: 14px; }
+  .measurement-actions { gap: 10px; }
+  .measurement-actions .button { min-width: 68px; }
+  .spectral-chart { flex: 1; min-height: 0; }
+  .spectral-chart svg { height: 100%; min-height: 0; overflow: hidden; }
+  .vis-card { flex-shrink: 0; margin-top: 10px; padding: 10px 18px; }
+  .vis-readout { gap: 8px; }
+  .vis-meter { height: 12px; }
+  .vis-row .reading-value { font-size: 16px; }
+  .readout-note { margin-top: 6px; }
+
+  .setup-layout { flex: 1; min-height: min-content; align-items: stretch; gap: 14px; }
+  .setup-card, .active-card { display: flex; flex-direction: column; }
+  .setup-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+  .setup-grid label:not(.switch) { gap: 4px; font-size: 11px; }
+  input:not([type="checkbox"]), select { min-height: 32px; padding: 6px 9px; }
+  .switch, .led-auto-field > span:last-child { min-height: 32px; }
+  .led-field > .label { margin-bottom: 4px; }
+  .setup-footer { margin-top: 12px; padding-top: 10px; }
+  .setup-footer .button { margin-top: 8px; }
+  .config-row { padding: 8px 0; gap: 10px; }
+  .configuration-status { margin: 12px 0; }
+  .configuration-status .hint { margin-top: 4px; }
+  .active-card > .button { margin-top: auto; }
+  .notice { padding: 0 0 8px; font-size: 12px; }
+
+  #data-view { display: grid; grid-template-columns: minmax(340px, .95fr) minmax(0, 1.1fr); gap: 14px; flex: 1; min-height: 0; }
+  .data-list-card, .saved-record-card { display: flex; flex-direction: column; min-height: 0; padding: 12px; }
+  .data-list-card > :not(.data-table), .saved-record-card > :not(.spectral-chart) { flex-shrink: 0; }
+  .data-list-card .measurement-actions { margin-top: 8px; }
+  .data-table { flex: 1; min-height: 0; overflow: auto; margin-top: 8px; overscroll-behavior: contain; }
+  .data-table table { font-size: 11px; }
+  .data-table th, .data-table td { padding: 6px; }
+  .data-table td:nth-child(3) { max-width: 150px; }
+  .saved-record-card { margin-top: 0; }
+  .saved-record-card .chart-extrema { font-size: 11px; margin: 4px 0; }
+  .saved-record-card .vis-readout { margin-top: 6px; }
+
+  .debug-content { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr) minmax(0, .8fr); gap: 12px 24px; padding: 12px 16px; margin-top: 0; }
+  .debug-content > div { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .debug-content pre { flex: 1; min-height: 0; overflow: auto; }
+  .debug-log-section pre { max-height: none; }
+}
+
+@media (min-width: 960px) and (min-height: 560px) and (max-height: 640px) {
+  .setup-grid { gap: 6px 12px; }
+  .setup-footer { margin-top: 8px; padding-top: 8px; }
+  .setup-card .card-heading, .active-card .card-heading { margin-bottom: 8px; }
+  .config-row { padding: 6px 0; }
+}

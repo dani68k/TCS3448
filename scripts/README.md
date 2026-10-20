@@ -11,7 +11,7 @@ abrir el HTML generado. Ejecutar desde la raíz del proyecto.
 node scripts/build-web.mjs
 ```
 
-Lee plantilla, CSS, protocolo, SpectralChart, UI y aplicación de `web/src/`; integra los cuatro módulos
+Lee plantilla, CSS, protocolo, SpectralChart, UI, capturas y aplicación de `web/src/`; integra los cinco módulos
 en un ámbito privado como script clásico y escribe `web/dist/index.html` UTF-8.
 Resuelve rutas respecto al propio script. El HTML resultante es autocontenido.
 Retira BOM UTF-8 antes de incrustar fuentes, para que no invalide selectores CSS.
@@ -49,3 +49,24 @@ reales. Para esas partes se requiere compilación y
 El script retorna fallo si una aserción no se cumple. Mantenerlo junto al protocolo
 al cambiar mensajes. Las regresiones de `test/` se documentan en su
 [README](../test/README.md); son independientes de este verificador.
+
+## test-storage.cmd y capturas
+
+Desde la raíz, `scripts\test-storage.cmd` compila y ejecuta DataStore y CaptureBLE
+reales con FS/NVS/GATT/FreeRTOS simulados en PC. Usa MSVC Build Tools 2019 instalado
+en la ruta indicada en el script; adaptar el call a vcvars64 si la instalación
+es distinta. Binarios/objetos quedan en `.pio/host`, fuera de firmware y flash.
+También se pueden compilar los dos tests con un compilador C++17 usando includes
+`test/host` y `src`; cada ejecutable compila un único archivo test.
+
+`node test/captures.test.mjs` verifica transporte/CSV/modal de producción con
+DOM/GATT simulados. No requiere dependencias npm. Regenerar primero el HTML para
+las regresiones de aplicación. [Cobertura y validación real pendiente](../test/README.md).
+
+Los tests de capturas también cubren FAST_BEGIN/FAST_NEXT, bloques de 504 bytes,
+resúmenes por streaming, fila sin cabecera, caché VIEW y fallback legacy/Read
+largo truncado. La reducción de solicitudes no mide tiempo de radio real.
+
+`test-storage.cmd` también compila/ejecuta `test/nvs_manager_test.cpp`: módulo
+nevs_manager y ConfigMath reales con Preferences simulado. verify-setup prueba
+CONFIG_SAVE_FAILED tras aplicar, sin presentar falsamente configuración anterior.

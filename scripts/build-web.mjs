@@ -2,14 +2,14 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 
 const source = new URL("../web/src/", import.meta.url);
 const read = async name => (await readFile(new URL(name, source), "utf8")).replace(/^\uFEFF/, "");
-const [template, css, protocol, chart, ui, app, logo] = await Promise.all([
-  read("index.template.html"), read("style.css"), read("protocol.mjs"), read("spectral-chart.mjs"), read("ui.mjs"), read("app.mjs"),
+const [template, css, protocol, chart, ui, captures, app, logo] = await Promise.all([
+  read("index.template.html"), read("style.css"), read("protocol.mjs"), read("spectral-chart.mjs"), read("ui.mjs"), read("captures.mjs"), read("app.mjs"),
   readFile(new URL("../web/images/logo-signal.png", import.meta.url)),
 ]);
 // The dependency-free protocol, presentation and BLE app share one private scope.
-const scripts = [protocol, chart, ui, app].map(source => source
+const scripts = [protocol, chart, ui, captures, app].map(source => source
   .replace(/^export /gm, "")
-  .replace(/^import \{[^\n]+\} from "\.\/(?:protocol|ui|spectral-chart)\.mjs";\r?\n/gm, ""));
+  .replace(/^import \{[^\n]+\} from "\.\/(?:protocol|ui|spectral-chart|captures)\.mjs";\r?\n/gm, ""));
 if (scripts.some(source => /^\s*(?:import|export)\s/m.test(source))) {
   throw new Error("Unexpected module dependency in the standalone page");
 }

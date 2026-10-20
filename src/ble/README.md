@@ -1,4 +1,4 @@
-﻿# Gestor BLE Web del TCS3448
+# Gestor BLE Web del TCS3448
 
 [Aplicación](../../README_APP.md) · [Gestor del sensor](../TCS3448Manager/README.md).
 
@@ -29,10 +29,11 @@ Características con sufijo `-7f2a-4f6c-9e31-8dbe0c2f5a70`:
 | `34480003` | COMMAND | Write con respuesta; ASCII o APPLY binario |
 | `34480004` | SAMPLE | Notify, cuatro fragmentos de 20 bytes, versión 1 |
 | `34480005` | CONFIG | Read, 20 bytes, versión 3 |
+| `34480006` | CAPTURES | Read + Write con respuesta, 20 bytes, protocolo de datos |
 
 START, STOP, GET_STATUS y GET_CONFIG siguen siendo ASCII sin terminador. APPLY_CONFIG
 usa un paquete de 20 bytes etiquetado 0xA4 con parámetros completos. El protocolo
-ya era binario: no se añade JSON ni una nueva fragmentación. Los
+de muestras sigue siendo binario y conserva sus cuatro fragmentos. Los
 [offsets y códigos](../../docs/HITO_3_BLE.md#servicio-gatt-v1) son la referencia de wire.
 El cliente del hito 3 no interpreta CONFIG v2; actualizar firmware y HTML juntos.
 
@@ -105,3 +106,127 @@ mismos codigos; el resto de offsets y los 20 bytes no cambian. Se acepta APPLY
 v2 para manual OFF/ON. START/STOP controlan el LED en AUTO; manual conserva
 su estado con STOP. Desconexion/fallo apagan ambos modos y conservan AUTO.
 Actualizar firmware y HTML juntos para utilizar AUTO.
+
+## Capturas manuales
+
+`CaptureBLE.h/.cpp` añade una cola independiente de 8 solicitudes de 20 bytes,
+procesada desde Update. `Init` monta DataStore; `Remember` asocia cada muestra
+que se va a transmitir con configuración y ADC reales (32 entradas acotadas).
+PIN fija una entrada; no se vuelve a medir al confirmar. Reset de sesión limpia
+PIN/transferencias/recibos y descarta solicitudes de sesiones anteriores.
+
+### Paquete CAPTURES
+
+UUID `34480006-7f2a-4f6c-9e31-8dbe0c2f5a70`, Read + Write con respuesta. Usa
+Las solicitudes tienen exactamente 20 bytes, enteros little endian. Sin notify en
+esta característica: solicitudes Write With Response y polling Read; la ruta rápida
+usa respuestas largas. Los
+samples continúan por su característica original, sin mezclar streams.
+
+| Bytes | Solicitud | Respuesta |
+| --- | --- | --- |
+| 0 | opcode | mismo opcode |
+| 1 | reservado 0 | error: 0 = OK |
+| 2..5 | request_id uint32 no cero, nuevo en cada operación | mismo request_id |
+| 6..7 | sequence uint16 (chunk = offset / 12) | misma sequence |
+| 8..19 | payload, resto cero | resultado / hasta 12 bytes |
+
+El navegador inicia su contador de solicitudes desde un uint32 aleatorio con
+crypto y lo incrementa. No acepta respuesta hasta que coincidan opcode, request
+y sequence; timeout 6 s por operación. Firmware publica la respuesta **después**
+de procesar la cola; onRead devuelve una caché protegida por sección crítica.
+El valor escrito de la característica nunca se interpreta como ACK antes de
+procesarse. Cola llena produce timeout, sin falso éxito ni retry automático.
+
+Offsets de payload siguientes son relativos al byte 8 del paquete:
+
+| Opcode | Operación | Solicitud | Respuesta OK |
+| --- | --- | --- | --- |
+| 1 | PIN_CAPTURE | sequence uint32 @0 | secuencia fijada uint32 @0; request de PIN es token de captura |
+| 2 | STAGE | offset uint16 @0, longitud uint8 @2 (0..9), bytes @3 | sin datos |
+| 3 | LOG_CAPTURE | token PIN uint32 @0, longitud descripción uint16 @4 | record_id uint32 @0, count uint16 @4 |
+| 4 | BEGIN / LIST_RECORDS / DOWNLOAD_DATA_CSV | sin payload | longitud uint32 @0, CRC32 uint32 @4, count uint16 @8 |
+| 5 | NEXT | offset uint32 @0, token BEGIN/GET uint32 @4 | hasta 12 bytes exactos; último bloque rellenado con ceros fuera de longitud |
+| 6 | END | token BEGIN/GET uint32 @0 | sin datos |
+| 7 | DELETE_RECORDS | cantidad uint16 @0 | count restante uint16 @0, cantidad borrada uint16 @2 |
+| 8 | GET_RECORD | record_id uint32 @0, positivo | longitud/CRC/count como BEGIN, cabecera + fila exacta |
+| 9 | RESET_STAGE | sin payload | sin datos |
+| 10 | DELETE_RECEIPT | offset uint32 @0, request DELETE uint32 @4 | hasta 12 bytes de IDs uint32 borrados |
+
+STAGE exige offsets consecutivos y máximo 400 bytes; PIN o RESET_STAGE lo limpia.
+LOG exige longitud exacta, descripción de hasta 80 bytes y PIN de la sesión.
+El request de PIN se guarda en CSV y hace idempotente repetir LOG con ese token:
+misma captura no añade otra fila, incluso después de reiniciar DataStore. La web
+no reintenta una escritura dudosa; refresca desde ESP32 al reconectar.
+
+DELETE: confirmar IDs en navegador, RESET_STAGE, subir IDs uint32 little endian
+mediante STAGE, ejecutar DELETE. El firmware rechaza cero, repetidos, más de 100
+o cualquier ID desconocido antes de modificar el archivo. Tras ACK la web lee
+DELETE_RECEIPT y compara todos los IDs exactos con la selección confirmada.
+Recibo limitado a 400 bytes y a la sesión; no ofrece operaciones de paths.
+
+La tabla anterior describe el transporte legacy, preservado para compatibilidad.
+La web actual prefiere estas operaciones adicionales:
+
+| Opcode | Operación | Payload solicitud | Respuesta |
+| --- | --- | --- | --- |
+| 11 | FAST_BEGIN | tipo uint8 @0 (0=CSV, 1=resúmenes, 2=registro), ID uint32 @4 (solo tipo 2) | 20 bytes: longitud uint32 @8, CRC32 @12, count uint16 @16, capacidad uint16 @18 = 504 (offsets absolutos) |
+| 12 | FAST_NEXT | offset uint32 @0, token FAST_BEGIN uint32 @4; sequence = offset / 504 | 8 bytes correlación + datos, longitud **8 + min(504, total-offset)** |
+
+FAST_NEXT guarda hasta 512 bytes en la caché de respuestas procesadas. onRead
+copia la caché; no modifica el archivo ni avanza el cursor desde la tarea BLE.
+Se revisó `BLECharacteristic.cpp`: onRead se invoca en la lectura inicial y el
+framework continúa mediante Read Blob sobre el mismo valor para un MTU menor.
+`BLEDevice::setMTU(517)` ofrece un MTU alto; no fuerza el MTU elegido por el host.
+Los UUID, escrituras de 20 bytes y notificaciones SAMPLE anteriores no cambian.
+
+CSV devuelve los bytes exactos del archivo. Resúmenes solo contiene cabecera de
+seis columnas e ID/descripción/uptime/gain/integración/corriente. GET_RECORD devuelve
+solo la fila con 36 columnas y LF, sin repetir cabecera. Ninguno crea archivos.
+El listado se genera por streaming. Todos anuncian tamaño/CRC antes de transferir;
+el último bloque no añade ceros al contenido válido. END (6) conserva su token.
+
+El navegador prueba FAST_BEGIN una vez por conexión. INVALID_PAYLOAD indica
+firmware legacy y activa 4/5/8. Si el host trunca un Read largo, cierra primero
+con END y repite la consulta por legacy. CRC incorrecto no se considera éxito.
+No se reintentan LOG/DELETE. El navegador también conserva una caché de registros
+verificados para VIEW, invalidada al refrescar, mutar o desconectar.
+
+Ambas rutas bloquean mutaciones hasta END, desconexión o 15 s de inactividad,
+validan token/offset/sequence y mantienen adquisición. Hay progreso/cancelación.
+El bloque útil aumenta 12 -> 504: hasta 42 veces menos comandos NEXT; velocidad
+real pendiente de medir con MTU/radio. No cambia `/data.csv` ni requiere uploadfs.
+
+| Código | Error |
+| --- | --- |
+| 0 | OK |
+| 1 | NO_SAMPLE |
+| 2 | INVALID_DESCRIPTION |
+| 3 | STORAGE_UNAVAILABLE |
+| 4 | STORAGE_FULL |
+| 5 | RECORD_NOT_FOUND |
+| 6 | INVALID_RECORD_IDS |
+| 7 | BUSY |
+| 8 | CSV_CORRUPT |
+| 9 | WRITE_FAILED |
+| 10 | TRANSFER_FAILED |
+| 11 | INVALID_PAYLOAD |
+
+Una caída durante LOG puede dejar la fila persistida y el ACK perdido; comprobar
+Data al reconectar. No hay reenvíos automáticos. Las mutaciones son síncronas en
+loop; reportan duración por serie y pueden retrasar una muestra. No se promete
+latencia hasta medir con flash y radio reales. [CSV y recuperación](../DataStore/README.md).
+
+Pruebas nativas ejecutan el CaptureBLE de producción con GATT/colas simulados:
+ACK procesado, PIN histórico, LOG idempotente, BUSY, tokens, timeout, recibo de
+borrado y aislamiento de sesión. No prueban comportamiento eléctrico de la radio.
+
+## Persistir APPLY_CONFIG
+
+Después de un ApplyConfig correcto, BLE guarda GetConfig con NVSManager antes
+de publicar el ACK. Si el sensor rechaza, no toca NVS. Resultado STATUS 6 + error
+24 (`CONFIG_SAVE_FAILED`) significa aplicado en hardware pero no confirmado
+persistente; CONFIG contiene los valores nuevos. No invalida ready ni detiene
+la adquisición por un fallo exclusivamente de NVS. Éxito 0 confirma también
+persistencia con este firmware. UUIDs y tamaños de paquetes siguen iguales.
+[Gestor y arranque](../nevs_manager/README.md).

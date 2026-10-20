@@ -65,6 +65,7 @@ const char* ErrorName(TCS3448Error error) {
     case TCS3448Error::InvalidSamplePeriod: return "INVALID_SAMPLE_PERIOD";
     case TCS3448Error::SamplePeriodTooShort: return "SAMPLE_PERIOD_TOO_SHORT";
     case TCS3448Error::InvalidPayload: return "INVALID_CONFIG_PAYLOAD";
+    case TCS3448Error::ConfigSaveFailed: return "CONFIG_SAVE_FAILED";
     default: return "CONFIG_APPLY_FAILED";
   }
 }

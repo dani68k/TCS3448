@@ -129,3 +129,12 @@ lo apaga, sin borrar el modo AUTO. Desconexion/fallo tambien lo apagan. APPLY
 calcula el estado fisico segun la adquisicion anterior y verifica los registros.
 Si falla APPLY, rollback restaura AUTO con LED apagado y adquisicion detenida.
 Manual OFF/ON conserva el comportamiento anterior. No se persiste tras reinicio.
+
+## Setup recuperado y errores de persistencia
+
+main pasa a Init(config) el setup recuperado por NVSManager. El manager sigue
+validando y aplicando el hardware; no accede a Preferences. BLE persiste únicamente
+el GetConfig confirmado tras un ApplyConfig correcto. El código compartido
+`ConfigSaveFailed = 24` se traduce a CONFIG_SAVE_FAILED y lo publica BLE cuando
+falla guardar, manteniendo la configuración real del sensor. AUTO conserva su
+modo tras reinicio; la adquisición permanece detenida hasta START.

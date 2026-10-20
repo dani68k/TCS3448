@@ -11,6 +11,7 @@ constexpr char StatusUUID[] = "34480002-7f2a-4f6c-9e31-8dbe0c2f5a70";
 constexpr char CommandUUID[] = "34480003-7f2a-4f6c-9e31-8dbe0c2f5a70";
 constexpr char SampleUUID[] = "34480004-7f2a-4f6c-9e31-8dbe0c2f5a70";
 constexpr char ConfigUUID[] = "34480005-7f2a-4f6c-9e31-8dbe0c2f5a70";
+constexpr char CaptureUUID[] = "34480006-7f2a-4f6c-9e31-8dbe0c2f5a70";
 constexpr uint8_t Version = 1;
 constexpr uint8_t ConfigVersion = 3;
 constexpr uint8_t ApplyTag = 0xa4;
@@ -19,7 +20,7 @@ constexpr size_t SampleSize = 48;
 constexpr uint8_t FragmentCount = 4;
 
 enum class Command : uint8_t { None = 0, Start = 1, Stop = 2, GetStatus = 3, GetConfig = 4, ApplyConfig = 5, Invalid = 255 };
-enum class Result : uint8_t { Ok = 0, UnknownCommand = 1, SensorError = 2, QueueFull = 3, InvalidConfig = 4, ConfigApplyFailed = 5 };
+enum class Result : uint8_t { Ok = 0, UnknownCommand = 1, SensorError = 2, QueueFull = 3, InvalidConfig = 4, ConfigApplyFailed = 5, ConfigSaveFailed = 6 };
 
 // Explicit little-endian encoding; never send a C++ struct's memory layout.
 inline void Put16(uint8_t* out, uint16_t value) {

@@ -3,6 +3,7 @@ export const UUID = Object.freeze({
   status: "34480002-7f2a-4f6c-9e31-8dbe0c2f5a70",
   command: "34480003-7f2a-4f6c-9e31-8dbe0c2f5a70",
   sample: "34480004-7f2a-4f6c-9e31-8dbe0c2f5a70",
+  captures: "34480006-7f2a-4f6c-9e31-8dbe0c2f5a70",
   config: "34480005-7f2a-4f6c-9e31-8dbe0c2f5a70",
 });
 export const COMMAND = Object.freeze({ START: 1, STOP: 2, GET_STATUS: 3, GET_CONFIG: 4, APPLY_CONFIG: 5 });
@@ -18,6 +19,7 @@ export const ERRORS = Object.freeze({
   16: "INVALID_GAIN", 17: "INVALID_INTEGRATION", 18: "INVALID_LED_CURRENT",
   19: "INVALID_SMUX_MODE", 20: "INVALID_AUTOZERO", 21: "INVALID_SAMPLE_PERIOD",
   22: "SAMPLE_PERIOD_TOO_SHORT", 23: "INVALID_CONFIG_PAYLOAD",
+  24: "CONFIG_SAVE_FAILED",
 });
 
 function validate(value, size, version = 1) {

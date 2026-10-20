@@ -1,0 +1,204 @@
+HITO 5B — REGISTRO MANUAL DE CAPTURAS TCS3448 EN CSV
+Proyecto: aplicación de laboratorio TCS3448 con ESP32, PlatformIO/Arduino y BLE Web (SPA, dark mode).
+
+CONTEXTO ACTUAL
+- TCS3448Manager y BLE Web ya funcionan.
+- La UI dispone de Measurement, Setup y Advanced / Raw Debug en menú lateral, con cabecera y menú sticky.
+- Measurement muestra un histograma RAW de F1, F2, FZ, F3, F4, F5, FY, FXL, F6, F7, F8 y NIR, con eje Y fijado a ADC Full Scale, MAX/MIN, marcas SAT y
+  barras horizontales VIS TL/BR.
+- CONNECT/DISCONNECT está unificado en cabecera. START/STOP está junto al histograma.
+- Setup controla gain, integración, corriente LED, SMUX, autozero, periodo y LED OFF/ON/AUTO; en AUTO lo gobierna el ESP32.
+- La web es autocontenida o sigue la estructura actual. Respetarla. La navegación debe conservar Web Bluetooth.
+- La configuración activa que confirma el ESP32 es fuente de verdad.
+- El firmware y la web NO deben contener referencias a «ATLANTES», tampoco la documentación.
+
+OBJETIVO
+Implementar un registro MANUAL de instantáneas, no grabación continua. En Measurement se añade un botón «LOG». Al pulsarlo el usuario introduce una
+breve descripción y confirma; se guarda exactamente UNA nueva fila con la última muestra válida y el setup REAL asociado, en un único archivo
+persistente /data.csv en flash del ESP32.
+En una nueva vista «Data» se podrán listar las filas, seleccionar una, reproducir su histograma con la misma apariencia que Measurement, borrar filas
+seleccionadas y descargar el CSV completo. Mantener SOLO las 100 filas más recientes: al añadir la fila 101, descartar la más antigua.
+COMPARAR histogramas (guardado y medición actual superpuestos) es la ÚLTIMA fase, solo si todo lo anterior funciona y está validado. No anticiparla.
+
+NO IMPLEMENTAR
+- grabación periódica / START RECORDING / STOP RECORDING / sesiones ni varios CSV;
+- calibración, dark, reference, transmitancia, absorbancia, normalización o análisis químico;
+- SD, Wi-Fi, HTTP, cloud, base de datos ni un explorador de archivos;
+- cambios de diseño extensos en Measurement o Setup.
+
+1. REVISIÓN PREVIA OBLIGATORIA
+Antes de modificar, inspecciona el repositorio real: platformio.ini, modelo TCS3448Config/TCS3448Sample, formato de muestras BLE, estados, HTML/JS y
+protocolo BLE, particiones, filesystem disponible y documentación. No inventes APIs Adafruit ni campos que no existan. Explica brevemente archivos a
+cambiar, modo de guardar CSV, forma de descargarlo por BLE y cómo reutilizar el componente de histograma. No muevas archivos sin motivo.
+
+2. UX EN MEASUREMENT: BOTÓN LOG
+- Ubicar [LOG] discretamente junto a START/STOP sin quitar funciones existentes.
+- Habilitar solo con conexión activa y al menos una última muestra válida disponible. La adquisición puede estar RUNNING o STOPPED: si está parada,
+  permitir guardar la última muestra visible si sigue siendo la última muestra válida; indicarlo claramente. Si no hay muestra, deshabilitar.
+- Al pulsar, CONGELAR en memoria el snapshot de esa muestra, incluyendo sus parámetros reales. Abrir un diálogo/modal dark mode que indique «Guardar
+  captura», número/timestamp orientativo, y campo «Descripción» (texto breve, longitud limitada por firmware; sugerido máximo 80 caracteres).
+  Descripción opcional o exigida según convenga, pero consistente entre web y firmware.
+- [CANCELAR] y [GUARDAR]. No leer la muestra nuevamente al confirmar: se debe guardar la congelada al abrir el diálogo, evitando que una lectura nueva
+  cambie silenciosamente la captura.
+- Mostrar estado «Guardando…», deshabilitar doble clic, esperar ACK real del ESP32, mostrar «Registro #N guardado», número de filas actuales o error.
+  No marcar éxito antes del ACK.
+- Una pulsación confirmada = una fila; prevenir duplicados por reintento o notificación repetida usando request_id/idempotencia o estrategia
+  documentada.
+
+3. CSV ÚNICO Y PERSISTENTE
+- Usar exactamente un archivo lógico /data.csv en la flash interna, preferiblemente LittleFS si lo soportan placa/partición. No formatear
+  automáticamente si LittleFS no monta; dejar adquisición operativa y reportar ERROR_STORAGE.
+- No crear un CSV por captura. La capacidad máxima es 100 filas DE DATOS, sin contar la cabecera.
+- Cabecera única con columnas ESTABLES y orden fijo. Propuesta mínima:
+  Para legibilidad, lista de columnas dividida en dos líneas. En el CSV real, unirlas en UNA sola cabecera, sin saltos de línea:
+  record_id,description,timestamp_ms,gain,integration_ms,led_current_ma,led_mode,auto_smux,autozero,sample_period_ms,
+  adc_full_scale,f1,f2,fz,f3,f4,f5,fy,fxl,f6,f7,f8,nir,vis_tl,vis_br,valid,analog_saturation,digital_saturation
+- Ajustar a los tipos reales del proyecto. Si existe un campo adicional de configuración de adquisición relevante, incluirlo. No guardar campos
+  ficticios. Marcar explícitamente flags desconocidos, nunca inventar «false» cuando no se midieron.
+- timestamp_ms es uptime del ESP32 (no fecha UTC) salvo que ya exista reloj absoluto fiable. Documentarlo. record_id creciente y estable para
+  identificar y borrar registros (no usar índice de fila). Conservar monotonicidad del ID también tras borrar todo/reiniciar usando un contador
+  persistente pequeño, u otra solución robusta; no reutilizar IDs accidentalmente.
+- description debe serializarse de modo CSV válido: escapar comillas duplicándolas y entrecomillar si hay separadores/saltos de línea; preferiblemente
+  restringir saltos de línea y longitud para facilitar manejo. CSV UTF-8, encabezado y fin de línea consistentes.
+- Persistir los parámetros que correspondían a ESA muestra, no la configuración actual al instante posterior si cambió entre lecturas. Si el snapshot
+  no tiene algún parámetro esencial, incorporarlo correctamente desde la fuente de verdad sin mezclar dos configuraciones.
+- Se permite una única cabecera CSV simple, sin comentarios de metadatos adicionales que compliquen el visor. Los metadatos de setup están en cada
+  fila.
+
+4. POLÍTICA FIFO DE 100 REGISTROS
+- Si hay menos de 100 filas: añadir nueva fila al final.
+- Si hay 100: al guardar una nueva, eliminar la fila con record_id/orden más antiguo y conservar 100 exactas.
+- Tras eliminar manualmente filas, la siguiente inserción aprovecha el hueco disponible.
+- Evitar corrupción del CSV durante compactación. Reescribir mediante archivo temporal /data.tmp y mecanismo de reemplazo seguro con recuperación ante
+  reset, verificando resultado, sin borrar el original antes de garantizar una copia válida. La semántica real de rename/replace del filesystem debe
+  comprobarse. Considerar copia de respaldo transitoria si LittleFS no permite reemplazo atómico. Documentar límites.
+- Para un máximo de 100 filas es aceptable leer, validar y reescribir al insertar/borrar si resulta más robusto y sencillo que implementar streaming
+  con índice; analizar consumo RAM antes de decidir. No asumir PSRAM. Preferir recorrido por streaming para recursos limitados.
+- Validar cabecera, columnas y registros antes de reescribir. Manejar archivo vacío/no existente, líneas corruptas, error de lectura, flash llena y
+  fallo de escritura. No borrar datos válidos por error.
+- Guardar cambios en flash de forma persistente y confirmarlos solo cuando la operación termine correctamente.
+
+5. NUEVA VISTA DATA EN EL MENÚ LATERAL
+Orden sugerido:
+Measurement
+Setup
+Data
+Advanced / Raw Debug
+Mantener SPA sin reload para no perder BLE. Estilo dark mode instrumental existente; usar tarjetas compactas sin capas redundantes.
+Data mostrará:
+- título discreto «Saved captures»;
+- contador «N / 100» y uso/estado de storage si está disponible;
+- tabla de registros con ID, descripción, timestamp uptime, gain, integration time, LED current, canal máximo opcional y acciones/selección;
+- botones [REFRESH], [DOWNLOAD CSV] y [DELETE SELECTED];
+- selección de una fila para ver debajo o a la derecha su histograma RAW y sus parámetros.
+No hace falta paginación pesada para 100 filas. Orden por record_id de más reciente a más antiguo para la tabla, aunque el fichero CSV se conserve en
+orden cronológico ascendente; indicar criterio. Si BLE se reconecta, refrescar estado y lista desde ESP32.
+
+6. REPRODUCIR UN HISTOGRAMA GUARDADO
+- Al seleccionar fila en Data, obtener su registro completo del ESP32 (no generar muestras ficticias).
+- Reutilizar el MISMO renderer/componente gráfico de Measurement (colores de barras, orden de canales, etiquetas, eje Y, MAX/MIN, VIS TL/BR). Si hoy
+  está acoplado al DOM, extraer una función reutilizable con una refactorización mínima y pruebas de regresión.
+- Para el registro guardado, eje Y = adc_full_scale GUARDADO en esa fila, no el setup actual. Mostrar «Saved record #N» y descripción, y diferenciar
+  claramente de medición en vivo.
+- Mantener el estado SAT coherente con lo existente: umbral 90 % amarillo y 95 % rojo, VIS excluidos de esas marcas. No interpretar RAW como
+  absorbancia o espectro calibrado.
+- Si se borra la fila seleccionada, limpiar selección de forma segura. Si se desconecta, puede mantenerse visualmente como «Last loaded record» sin
+  falsificar conectividad.
+
+7. BORRADO DE FILAS
+- Permitir seleccionar una o varias filas mediante checkbox o selección equivalente.
+- [DELETE SELECTED] exige confirmación con número de filas e IDs o descripciones. Firmware valida todos los IDs. No ejecutar borrado si está en curso
+  otra mutación.
+- Borrado solo de filas seleccionadas; reescribir CSV seguro y persistente. ACK incluye IDs borrados y nuevo contador. No borrar todo por accidente.
+- Un registro desconocido debe producir error claro; evitar path traversal u operaciones de archivos arbitrarios.
+
+8. DESCARGA DEL CSV COMPLETO AL NAVEGADOR
+- El usuario pulsa [DOWNLOAD CSV] en Data. Descargar el archivo lógico data.csv completo, incluyendo cabecera y hasta 100 filas, sin transformar
+  números ni cambiar orden/formato.
+- Web Bluetooth no permite descargar un fichero grande con una única notificación. Reutilizar transporte y MTU reales. Crear una transferencia
+  segmentada sencilla y robusta (preferible protocolo pull: begin -> next chunk -> end; o la existente), con índices de secuencia, longitud total y
+  verificación de bytes. Chunks binarios si encajan con el sistema actual.
+- Evitar pérdidas, duplicados, truncados y notificaciones mezcladas con muestras de adquisición. Diseñar acceso serializado/protección de
+  transferencia: no modificar data.csv mientras se descarga; puede bloquear temporalmente LOG/DELETE con un error BUSY o trabajar con snapshot de
+  archivo consistente. No bloquear permanentemente la adquisición.
+- En web: mostrar progreso, cancelar si es sencillo, reconstruir bytes y generar Blob text/csv; charset=utf-8, descargando «data.csv». Comprobar
+  tamaño final; CRC32 opcional pero recomendable si la arquitectura permite implementarlo sin complejidad excesiva.
+- Descargar un CSV vacío (cabecera sin filas) también debe funcionar, si hay archivo válido.
+
+9. PROTOCOLO BLE Y ESTADOS
+- Conservar UUIDs, comandos y flujo de muestras existentes; ampliar protocolo, no reescribirlo sin necesidad.
+- Diseñar comandos conceptuales LOG_CAPTURE, LIST_RECORDS, GET_RECORD, DELETE_RECORDS, DOWNLOAD_DATA_CSV y mensajes de ACK/error. Ajustar nombres y
+  codificación al protocolo real.
+- Cada operación BLE debe tener correlación request/response para evitar atribuir un ACK a otro comando.
+- Gestionar MTU, fragmentación, timeouts, reconexión y operaciones ocupadas; limitar tamaños máximos y validar payload en firmware.
+- No depender de variables JS locales como fuente de verdad para el contenido del CSV ni para el ID asignado.
+- Si BLE se desconecta durante un LOG, no repetir automáticamente una operación no idempotente sin verificar el resultado en el ESP32; refrescar lista
+  al reconectar.
+
+10. SEPARACIÓN DE RESPONSABILIDADES
+La estructura conceptual será:
+TCS3448Manager -> TCS3448Sample -> BLE Web / Measurement -> usuario pulsa LOG -> DataStore -> LittleFS (/data.csv).
+DataStore o DataLogger simplificado administra persistencia, CSV, FIFO, listado, lectura por ID y borrado. BLEWebManager administra comandos y
+transferencia. UI administra modal, tabla y representación. main.cpp coordina y debe mantenerse pequeño.
+No tomar una segunda muestra dentro del almacén. No introducir un task de logging periódico.
+
+11. RENDIMIENTO Y SEGURIDAD
+- Máximo 100 filas, con tamaño de memoria acotado.
+- Durante escritura o compactación, evitar bloqueos prolongados de BLE/lectura. Medir duración si conviene. No saturar de logs serie.
+- LittleFS: verificar partición flash real; no usar autoformat destructivo.
+- Si el CSV está mal formado, reportar error explícito y evitar reescritura destructiva.
+- Errores sugeridos: NO_SAMPLE, INVALID_DESCRIPTION, STORAGE_UNAVAILABLE, STORAGE_FULL, RECORD_NOT_FOUND, INVALID_RECORD_IDS, BUSY, CSV_CORRUPT,
+  WRITE_FAILED, TRANSFER_FAILED.
+- La política de pérdida del más antiguo aplica SOLO al insert #101 y posteriores, o borrado manual; nunca borrar silenciosamente otras filas.
+
+12. FASE FINAL OPCIONAL — COMPARAR HISTOGRAMAS
+IMPLEMENTAR ÚNICAMENTE DESPUÉS DE CERRAR Y VALIDAR LOS PUNTOS ANTERIORES. Si no hay validación real suficiente, dejarlo como tarea pendiente
+claramente documentada, no fingir que está acabado.
+Objetivo: desde Data elegir «Compare with live measurement» sobre una fila guardada; al volver a Measurement, mostrar el histograma RAW guardado y el
+actual SUPERPUESTOS de forma legible (por ejemplo, barra estrecha/contorno semitransparente sobre cada barra live), manteniendo orden, colores y
+valores identificables.
+- No confundir el guardado con live; leyenda clara.
+- Si difieren los ADC Full Scale, NO superponer alturas en counts con dos escalas incongruentes. Usar un eje común RAW con máximo =
+  max(full_scale_guardado, full_scale_live) y mostrar ambos full scales; conservar counts originales sin normalización ni calibración.
+- Si falta live o está desconectado, mostrar solo referencia guardada y estado claro.
+- [EXIT COMPARE] restaura Measurement normal. No alterar flujo de datos ni setup.
+- Esta función es opcional hasta completar y comprobar robustez del resto.
+
+13. DOCUMENTACIÓN OBLIGATORIA
+Actualizar ARCHITECTURE.md global (FW -> BLE -> Web -> DataStore, estados, protocolo, CSV, persistencia y FIFO) y README.md de todos los módulos
+afectados, incluido el módulo de datos. Describir esquema CSV exacto, timestamp, gestión de IDs, escritura segura, descarga por chunks, límite 100,
+decisiones de navegación y pruebas. No duplicar documentos ni incluir el nombre «ATLANTES» en código o documentación.
+
+14. PRUEBAS Y CRITERIOS DE ACEPTACIÓN
+A. LOG una sola fila con descripción; comprobar correspondencia exacta con último snapshot y setup histórico.
+B. LOG mientras se reciben nuevas notificaciones: la fila corresponde al snapshot congelado al abrir modal.
+C. Cancelar modal: ninguna fila nueva.
+D. Guardar sin conexión o sin muestra: error coherente.
+E. 1, 99 y 100 registros: mantener todos; al 101, exactamente 100 y desaparece solo el ID más antiguo.
+F. Borrar varias filas: quedan únicamente las no seleccionadas.
+G. Reset del ESP32: persisten datos, IDs y orden.
+H. Seleccionar fila: histograma coincide canal por canal y full scale guardado.
+I. Descargar CSV: mismo contenido y tamaño que el archivo LittleFS, filas con igual número de columnas, descripciones bien escapadas, sin pérdidas ni
+duplicados.
+J. Desconexión/reconexión BLE: Data refresca lista y selección de forma coherente; no se duplica un LOG.
+K. Measurement, Setup, LED AUTO, histograma, SAT, VIS y debug continúan funcionando igual.
+L. Compilar PlatformIO y ejecutar tests automatizados pertinentes; diferenciar tests de software de validación física aún pendiente.
+
+15. ORDEN DE TRABAJO PARA CODEX
+PASO 1: analizar arquitectura real, librerías, particiones, sample/config y protocolo; informar brevemente el plan.
+PASO 2: implementar almacenamiento /data.csv con IDs, persistencia, CRUD y FIFO de 100, más pruebas de CSV/recuperación.
+PASO 3: añadir comando LOG y modal en Measurement; probar congelación de muestra y ACK.
+PASO 4: incorporar vista Data y listado, consulta, selección y reproducción del histograma.
+PASO 5: implementar selección múltiple y borrado seguro.
+PASO 6: implementar descarga BLE de CSV con control de integridad.
+PASO 7: actualizar ARCHITECTURE.md y README.md de cada módulo afectado.
+PASO 8: compilar, ejecutar pruebas, revisar regresiones y describir pruebas reales pendientes.
+PASO 9: SOLO SI TODO LO ANTERIOR ESTÁ CORRECTO, abordar comparación guardado vs live; en caso contrario documentar pendiente.
+
+ENTREGABLE FINAL
+Presentar resumen de archivos modificados/creados, esquema CSV exacto, protocolo BLE, decisión filesystem/partición, manejo de IDs, protección contra
+fallos al reescribir, política FIFO, pruebas ejecutadas, limitaciones y lista breve para validación en ESP32 real. Nunca afirmar que un test hardware
+pasó si no se ejecutó.
+
+PRIORIDADES
+Integridad de datos > preservar funcionalidad existente > sencillez > claridad UI > robustez BLE > futuras extensiones.

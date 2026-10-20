@@ -1,5 +1,7 @@
 #include "ble.h"
 #include "BLEProtocol.h"
+#include "CaptureBLE.h"
+#include "nvs_manager/nvs_manager.h"
 #include "TCS3448Manager/TCS3448Manager.h"
 
 #include <Arduino.h>
@@ -146,6 +148,13 @@ void execute(const QueuedCommand& queued) {
       commandError = queued.validPayload ? TCS3448Manager::ApplyConfig(config) : TCS3448Error::InvalidPayload;
       if (commandError != TCS3448Error::None) {
         lastResult = commandError == TCS3448Error::ConfigApplyFailed ? Result::ConfigApplyFailed : Result::InvalidConfig;
+      } else {
+        const auto saved = NVSManager::Save(TCS3448Manager::GetConfig());
+        Serial.printf("[NVS] setup save: %s\n", NVSManager::ResultName(saved));
+        if (saved != NVSManager::Result::Ok) {
+          commandError = TCS3448Error::ConfigSaveFailed;
+          lastResult = Result::ConfigSaveFailed;
+        }
       }
       fragmentIndex = FragmentCount;
       publishConfig();  // Configuration snapshot is ready before the application ACK.
@@ -166,9 +175,11 @@ bool Init() {
   commands = xQueueCreate(8, sizeof(QueuedCommand));
   if (!commands) return false;
   BLEDevice::init(DeviceName);
+  BLEDevice::setMTU(517); // Peer/OS negotiates the actual MTU; legacy packets stay 20 bytes.
   BLEServer* server = BLEDevice::createServer();
   server->setCallbacks(&serverCallbacks);
-  BLEService* service = server->createService(BLEUUID(ServiceUUID), 20);
+  BLEService* service = server->createService(BLEUUID(ServiceUUID), 24);
+  if(!CaptureBLE::Init(service)) return false;
   statusCharacteristic = service->createCharacteristic(StatusUUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
   statusSubscription = new BLE2902();
   statusCharacteristic->addDescriptor(statusSubscription);
@@ -194,6 +205,7 @@ void Update() {
   const uint32_t currentSession = session.load();
   if (handledSession != currentSession) {
     handledSession = currentSession;
+    CaptureBLE::Reset();
     TCS3448Manager::StopAcquisition(true);
     publishConfig();
     fragmentIndex = FragmentCount;
@@ -224,12 +236,14 @@ void Update() {
     publishStatus(true);
   }
   if (!connected.load() || session.load() != currentSession) return;
+  CaptureBLE::Update();
 
   const auto previousError = TCS3448Manager::GetStatus().error;
   TCS3448Sample sample;
   if (TCS3448Manager::Update(sample)) {
     // Never replace an incomplete frame; drop the new transmission if needed.
     if (fragmentIndex == FragmentCount && sampleSubscription->getNotifications()) {
+      CaptureBLE::Remember(sample);
       EncodeSample(sample, encodedSample);
       sampleSequence = sample.sequence;
       fragmentIndex = 0;

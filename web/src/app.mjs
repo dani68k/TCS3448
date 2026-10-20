@@ -1,7 +1,8 @@
 import { UUID, COMMAND, ERRORS, GAINS, decodeStatus, decodeConfig, encodeApply, SampleAssembler } from "./protocol.mjs";
+import { createCaptureUI } from "./captures.mjs";
 import { createInstrumentUI } from "./ui.mjs";
 
-const ids = ["connect", "start", "refresh", "apply", "setup", "gain", "integration", "led-current", "led-enabled", "led-auto", "smux", "autozero", "period", "connection", "support", "status", "config", "config-state", "sample", "received", "message", "nav-measurement", "nav-setup", "nav-debug", "debug-view", "measurement-view", "setup-view", "setup-connect-link", "setup-disconnected", "acquisition-state", "device-name", "sample-readout", "spectral-chart", "summary-led-current", "summary-gain", "summary-integration", "spectral-extrema", "debug-log", "config-detail", "led-label"];
+const ids = ["connect", "start", "refresh", "apply", "setup", "gain", "integration", "led-current", "led-enabled", "led-auto", "smux", "autozero", "period", "connection", "support", "status", "config", "config-state", "sample", "received", "message", "nav-measurement", "nav-setup", "nav-data", "data-view", "nav-debug", "debug-view", "measurement-view", "setup-view", "setup-connect-link", "setup-disconnected", "acquisition-state", "device-name", "sample-readout", "spectral-chart", "summary-led-current", "summary-gain", "summary-integration", "spectral-extrema", "debug-log", "config-detail", "led-label"];
 const el = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 const assembler = new SampleAssembler();
 const ui = createInstrumentUI(el);
@@ -17,7 +18,10 @@ let missed = 0;
 const supported = !!navigator.bluetooth && window.isSecureContext;
 el.gain.replaceChildren(...GAINS.map((gain, code) => new Option(`${gain}x`, String(code))));
 
+const captures = createCaptureUI({ getChannel:()=>characteristics?.captures, linked:()=>!!device?.gatt?.connected && !!characteristics?.captures, running:()=>!!latestStatus?.acquiring, action });
+
 function controls() {
+  captures.controls(busy);
   const linked = !!characteristics && !!device?.gatt?.connected;
   const ready = linked && latestStatus?.ready && activeConfig?.valid;
   const running = !!latestStatus?.acquiring;
@@ -42,6 +46,7 @@ function showError(error) {
     INVALID_SAMPLE_PERIOD: "Enter a positive whole-number sample period.",
     SAMPLE_PERIOD_TOO_SHORT: "Sample period is too short for these sensor settings. Increase the period.",
     CONFIG_APPLY_FAILED: "The device could not apply the settings. Read the active configuration before continuing.",
+    CONFIG_SAVE_FAILED: "Settings are applied, but could not be saved for restart. Retry APPLY CONFIGURATION to save them.",
     ACK_TIMEOUT: "The device has not confirmed the change. Read the active configuration before retrying.",
     INITIALIZATION_FAILED: "The sensor is unavailable. Check the device and reconnect.",
   };
@@ -107,6 +112,7 @@ function onSample(event) {
     }
     lastSequence = sample.sequence;
     ui.sample(sample, !applyingConfig && activeConfig?.valid ? activeConfig.integrationMs : undefined, !applyingConfig && activeConfig?.valid ? activeConfig.adcFullScale : undefined, !applyingConfig && activeConfig?.valid ? activeConfig.ledCurrentMa : undefined);
+    captures.sample(sample);
     ++received;
     el.sample.textContent = [
       `Muestra #${sample.sequence} - ESP32 ${sample.timestampMs} ms - ${sample.channelCount} channels`,
@@ -122,6 +128,7 @@ function clearConnection() {
     characteristics.sample.removeEventListener("characteristicvaluechanged", onSample);
   }
   characteristics = null;
+  captures.disconnect();
   latestStatus = activeConfig = null;
   assembler.reset();
   lastSequence = null;
@@ -156,7 +163,7 @@ async function sendCommand(name, { payload, fill = false, allowUnavailable = fal
       if (name === "STOP" || name === "APPLY_CONFIG") assembler.reset();
       if (status.result !== 0) {
         if (allowUnavailable && name === "GET_CONFIG" && !status.ready && status.result === 2) return;
-        const resultNames = ["OK", "UNKNOWN_COMMAND", "SENSOR_ERROR", "COMMAND_QUEUE_FULL", "INVALID_CONFIG", "CONFIG_APPLY_FAILED"];
+        const resultNames = ["OK", "UNKNOWN_COMMAND", "SENSOR_ERROR", "COMMAND_QUEUE_FULL", "INVALID_CONFIG", "CONFIG_APPLY_FAILED", "CONFIG_SAVE_FAILED"];
         throw new Error(`${name}: ${status.error ? ERRORS[status.error] ?? status.error : resultNames[status.result] ?? "COMMAND_FAILED"} (result=${status.result})`);
       }
       return;
@@ -192,7 +199,13 @@ el.connect.addEventListener("click", () => action(async () => {
     const command = await service.getCharacteristic(UUID.command);
     const sample = await service.getCharacteristic(UUID.sample);
     const config = await service.getCharacteristic(UUID.config);
-    characteristics = { status, command, sample, config };
+    let captureChannel = null;
+    try {
+      captureChannel = await service.getCharacteristic(UUID.captures);
+    } catch (error) {
+      if (error.name !== "NotFoundError") throw error;
+    }
+    characteristics = { status, command, sample, config, captures:captureChannel };
     status.addEventListener("characteristicvaluechanged", onStatus);
     sample.addEventListener("characteristicvaluechanged", onSample);
     await status.startNotifications();
@@ -206,6 +219,14 @@ el.connect.addEventListener("click", () => action(async () => {
     await sendCommand("GET_CONFIG", { fill: true, allowUnavailable: true });
     if (!device.gatt.connected) throw new Error("Conexion perdida durante la configuracion");
     ui.connection("connected", device.name || "TCS3448");
+    if (captureChannel) {
+      try { await captures.refresh(); } catch (error) { showError(error); }
+    } else {
+      const warning = "Capturas no disponibles: el ESP32 no anuncia CAPTURES (34480006). Carga el firmware del hito 5B y reconecta. Si ya está cargado, elimina el emparejamiento Bluetooth y vuelve a conectar.";
+      el.message.textContent = warning;
+      captures.unavailable(warning);
+      ui.debug(`WARNING ${warning}`);
+    }
   } catch (error) {
     device?.gatt?.disconnect();
     clearConnection();
@@ -223,9 +244,16 @@ el.apply.addEventListener("click", () => action(async () => {
   ui.configurationState("APPLYING", "warning", "Waiting for device confirmation.");
   try {
     await sendCommand("APPLY_CONFIG", { payload, fill: true });
-    ui.configurationState("CONFIGURATION VALID", "success", "Settings applied to the device.");
+    ui.configurationState("CONFIGURATION VALID", "success", "Settings applied to the device and saved for restart.");
     ui.clearSample();
+    captures.clearSample();
   } catch (error) {
+    if (error.message.includes("CONFIG_SAVE_FAILED")) {
+      ui.clearSample();
+      captures.clearSample();
+      ui.configurationState("APPLIED / NOT SAVED", "warning", "Active settings are confirmed, but persistence failed. Retry APPLY to save for restart.");
+      throw error;
+    }
     if (error.message.includes("ACK_TIMEOUT")) {
       activeConfig = null;
       ui.config(null);

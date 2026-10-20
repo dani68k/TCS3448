@@ -41,6 +41,7 @@ enum class TCS3448Error : uint8_t {
   InvalidGain = 16, InvalidIntegration = 17, InvalidLedCurrent = 18,
   InvalidSmuxMode = 19, InvalidAutozero = 20, InvalidSamplePeriod = 21,
   SamplePeriodTooShort = 22, InvalidPayload = 23,
+  ConfigSaveFailed = 24,  // Settings applied, but not confirmed persistent in NVS.
 };
 
 struct TCS3448Status {

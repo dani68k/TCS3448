@@ -6,7 +6,7 @@
 
 | Archivo | Cometido |
 | --- | --- |
-| `index.template.html` | Un documento con Measurement, Setup y Debug; estado comun |
+| `index.template.html` | Un documento con Measurement, Setup, Data y Debug; estado comun |
 | `style.css` | Variables y componentes dark, grid/flex y focus/contraste |
 | `ui.mjs` | Presentación, rutas hash y readouts; sin acceso Bluetooth |
 | `app.mjs` | Única sesión GATT, comandos y enlaces con la presentación |
@@ -61,7 +61,7 @@ node test/web_app.test.mjs
 node test/web_protocol.test.mjs
 ```
 
-El generador elimina imports/exports conocidos, integra los cuatro módulos y CSS
+El generador elimina imports/exports conocidos, integra los cinco módulos y CSS
 en `web/dist/index.html` y rechaza dependencias no resueltas. No hay paquetes npm,
 fuentes remotas, segundo documento Setup ni navegación que recargue la aplicación.
 La salida abre directamente desde disco. Las comprobaciones usan DOM/GATT
@@ -70,3 +70,38 @@ simulados; revisar también el navegador real y la continuidad con el ESP32.
 `spectral-chart.mjs` implementa el SVG RAW, mapping centralizado y escala fija ADC Full Scale.
 Su API, longitudes de onda, extremos MAX/MIN y estados se documentan en el
 [README web](../README.md#componente-espectral-hito-5a1).
+
+## Capturas manuales
+
+`captures.mjs`: CaptureTransport (request/response, stage, pull, CRC32), parser
+CSV y createCaptureUI (modal LOG, tabla Data, GET_RECORD, borrado/recibo, descarga).
+`app.mjs` proporciona acceso a la misma conexión y action/busy; las notificaciones
+siguen entrando durante el modal y las transferencias. La muestra elegida se
+fija por secuencia en firmware, no se envían canales/config inventados desde JS.
+`protocol.mjs` añade UUID CAPTURES sin alterar SAMPLE/CONFIG/STATUS existentes.
+
+`ui.mjs` exporta también `createRawHistogram(host, extrema, visHost)` con
+`update(sample, fullScale)`: Measurement y Data comparten renderer, VIS y escala
+por muestra. Data utiliza full scale y setup obtenidos en GET_RECORD. Rutas hash
+incluyen `#/data`; navegar no crea otra sesión Bluetooth. Descripción máx. 80 bytes,
+no 80 caracteres Unicode. No hay comparación superpuesta todavía.
+
+Regenerar con `node scripts/build-web.mjs`. Ver `test/captures.test.mjs` para
+freeze, cancelación, ACK diferido, descarga íntegra y errores. [Detalles de UX](../README.md#registro-manual-y-data).
+
+El transporte rápido usa FAST_BEGIN/FAST_NEXT, 504 bytes útiles por lectura GATT
+larga, listado compacto por `list()` y fila sin cabecera por `record(id)`.
+`download()` se reserva para CSV íntegro. `recordCache` conserva filas verificadas
+hasta refresh/mutación/desconexión; no vuelve a consultar al repetir VIEW.
+Firmware anterior y hosts que truncan Read largo usan fallback legacy tras END.
+
+El bloque final de style.css ajusta el escritorio al viewport mediante flex/grid
+y min-height:0; SVG usa el alto disponible con su viewBox original. Las clases
+data-list-card/saved-record-card delimitan tabla con scroll y replay fijo.
+Un ajuste extra para alturas de hasta 640 px reduce espaciado de Setup. Bajo
+960 × 560 CSS px sigue disponible el layout responsive con scroll accesible.
+
+APPLY con éxito informa que el setup quedó aplicado y guardado para reinicio.
+protocol.mjs reconoce error 24 CONFIG_SAVE_FAILED; app.mjs mantiene readback
+actual, limpia la muestra anterior y muestra APPLIED / NOT SAVED sin invalidar
+el sensor. El guardado se realiza en firmware, no mediante una segunda orden JS.

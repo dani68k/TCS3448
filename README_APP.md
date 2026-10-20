@@ -1,9 +1,9 @@
-﻿# TCS3448 — Aplicación FW + BLE + Web
+# TCS3448 — Aplicación FW + BLE + Web
 
 Aplicación de caracterización y control del TCS3448 sobre ESP32, PlatformIO y
-Arduino. El hito 4 añade un panel de setup remoto al flujo de adquisición debug.
-La Web configura y muestra ADC crudos: no implementa análisis, gráficas,
-normalización, calibración, DARK/REFERENCE, CSV ni almacenamiento histórico.
+Arduino. Incluye setup remoto, histograma RAW y capturas manuales persistentes.
+La Web configura y muestra ADC crudos: no implementa análisis,
+normalización, calibración ni DARK/REFERENCE. Incluye capturas manuales persistentes en CSV.
 
 ## Arquitectura general
 
@@ -281,3 +281,40 @@ Una compilación y pruebas simuladas correctas no cierran la aceptación en hard
 Actualizar este README y los README internos en el mismo cambio que las API.
 Mantener los formatos binarios en la guía BLE como referencia detallada, sin
 crear otro documento global paralelo. Cada futuro módulo debe incluir su README.
+
+## Capturas manuales (hito 5B)
+
+Measurement incorpora LOG: fija la muestra visible y su setup real en firmware,
+pide descripción opcional (80 bytes UTF-8), permite cancelar y confirma una fila
+solo después del ACK de escritura. STOP permite guardar la última muestra válida.
+Data (`#/data`) lista 100 capturas como máximo, permite VIEW con histograma RAW
+histórico, selección múltiple con confirmación de borrado y DOWNLOAD CSV exacto
+con progreso/cancelación y CRC32. Una captura confirmada es una fila; no hay
+sesiones ni grabación periódica. IDs se conservan tras reinicio/borrado.
+
+LittleFS usa la partición existente de 896 KiB, sin autoformato. El primer uso
+requiere filesystem aprovisionado; el archivo local `data/data.csv` contiene
+cabecera válida. No subir una imagen de filesystem sobre datos a conservar.
+No se ha grabado ni formateado la placa como parte de las pruebas de software.
+
+Referencias: [arquitectura](ARCHITECTURE.md), [CSV/IDs/recuperación](src/DataStore/README.md),
+[protocolo pull BLE](src/ble/README.md#capturas-manuales),
+[pruebas y validación física pendiente](test/README.md).
+La comparación superpuesta guardado/live queda pendiente hasta cerrar validación
+real del registro, persistencia, borrado y descarga.
+
+La gestión CSV optimizada separa REFRESH (seis columnas resumen), VIEW (fila
+individual sin cabecera, con caché por conexión) y DOWNLOAD CSV (archivo exacto).
+FAST_NEXT transmite hasta 504 bytes útiles por lectura GATT larga, conservando
+CRC/cancelación y compatibilidad legacy. Actualizar firmware/web; no requiere
+volver a cargar `data/` ni cambia las capturas persistidas.
+
+## Recuperación del setup al arrancar
+
+APPLY CONFIGURATION guarda automáticamente el setup confirmado en Preferences/NVS,
+incluido LED AUTO. Al reiniciar, se valida y recupera antes de iniciar el sensor;
+la web recibe esos valores por CONFIG. Sin un setup válido se usan defaults.
+NVS no disponible no impide el arranque del sensor/BLE. Si el sensor aplica pero
+NVS falla, la web indica APPLIED / NOT SAVED para permitir reintentar el guardado.
+[Formato y flujo](src/nevs_manager/README.md). Cargar firmware y HTML actualizados;
+no hace falta subir filesystem ni borrar capturas.

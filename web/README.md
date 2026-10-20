@@ -3,10 +3,10 @@
 [Aplicación FW/BLE](../README_APP.md) · [Arquitectura de UI](../ARCHITECTURE.md) ·
 [Protocolo BLE](../docs/HITO_3_BLE.md).
 
-Interfaz de instrumento en dark mode. Una sola aplicación con tres vistas:
+Interfaz de instrumento en dark mode. Una sola aplicación con cuatro vistas:
 **Measurement** para adquisición, **Setup** para configuración y
-**Advanced / Raw Debug** para diagnostico.
-Los UUID, mensajes y lógica del sensor no cambian en este rediseño.
+**Data** para capturas y **Advanced / Raw Debug** para diagnostico.
+Los UUID y mensajes originales del sensor se conservan; CAPTURES amplía el servicio.
 
 ## Abrir y navegar
 
@@ -17,13 +17,14 @@ mediante HTTPS, por ejemplo en GitHub Pages.
 
 - `index.html#/measurement`: vista principal, predeterminada.
 - `index.html#/setup`: vista de configuración.
+- `index.html#/data`: capturas persistidas en el ESP32.
 - `index.html#/debug`: vista de diagnostico RAW y BLE.
 
 No existe un segundo documento `setup.html`: la navegación cambia el fragmento
 URL y muestra/oculta vistas sin recargar. Así se conservan la sesión GATT,
 suscripciones, adquisición, última muestra y formulario editado. Atrás/adelante
 funcionan mediante hashchange. Recargar o cerrar sí destruye la sesión de página.
-La [decisión SPA](../ARCHITECTURE.md#un-documento-dos-vistas) evita duplicar BLE.
+La [decisión SPA](../ARCHITECTURE.md#spa-y-estados) evita duplicar BLE.
 
 ## Archivos y responsabilidades
 
@@ -194,3 +195,67 @@ F1-F8, FZ, FY, FXL y NIR; VIS TL/BR nunca reciben marca SAT. El flag global BLE
 no se propaga a todas las barras porque no identifica canales ni distingue VIS.
 Puede indicar saturacion analogica sin un RAW a full scale; ese flag original se
 conserva en Debug, sin atribuirlo a un canal. Los counts numericos no se alteran.
+
+## Registro manual y Data
+
+Si el servicio no anuncia CAPTURES (`34480006`), la conexión conserva Measurement
+y Setup, deshabilita LOG/Data y muestra el diagnóstico. Cargar el firmware 5B;
+si ya está cargado, renovar el emparejamiento Bluetooth antes de reconectar.
+
+LOG está junto a START/STOP; requiere BLE y muestra válida. Se congela la
+secuencia al pulsar y firmware confirma PIN antes de mostrar el modal oscuro.
+Admite descripción opcional, máximo 80 bytes UTF-8. CANCELAR no modifica flash;
+GUARDAR espera ACK real, bloquea doble clic y muestra ID asignado por ESP32.
+Si está STOPPED se indica que se guarda la última muestra visible. Notificaciones
+posteriores no cambian la captura. Error/desconexión no reintenta LOG.
+
+Data conserva SPA/GATT, muestra contador N / 100 y estado de almacenamiento.
+La tabla es descendente por ID; REFRESH pide solo los seis campos del listado
+y valida su CRC. Reconectar refresca automáticamente. VIEW pide una fila al
+ESP32 la primera vez y después reutiliza la copia verificada en memoria. Usa el mismo `createRawHistogram` de Measurement (incluidos VIS, MAX/MIN,
+90/95 % SAT), con ADC Full Scale histórico. El texto distingue Saved record y
+Last loaded record desconectado. Counts ausentes no se sustituyen por cero.
+
+Los checkbox permiten borrar varias filas; DELETE SELECTED confirma cantidad e
+IDs y espera ACK/recibo de los IDs exactos. Una selección borrada limpia replay.
+DOWNLOAD CSV usa bytes originales del archivo, longitud y CRC32 verificados,
+Blob text/csv UTF-8, nombre data.csv, sin reformateo de números. El pull por
+bloques de hasta 504 bytes útiles, con lecturas GATT de hasta 512 bytes; muestra
+progreso y permite cancelar. El firmware ofrece MTU 517, negociado por el host.
+Acquisición sigue funcionando; mutaciones quedan BUSY durante la transferencia.
+
+`captures.mjs` contiene UI/transport/parser; `app.mjs` comparte su bloqueo de
+acciones con Setup/START/STOP. `ui.mjs` extrae el wrapper de histograma y VIS
+para reutilizarlo en ambas vistas; el renderer espectral conserva su lógica.
+El CSV es UTF-8 y el timestamp es uptime ESP32, no fecha UTC.
+[Esquema y fallos](../src/DataStore/README.md) · [protocolo](../src/ble/README.md#capturas-manuales).
+
+Pruebas: `node test/captures.test.mjs` y regresiones de test/ más verify-setup.
+Son pruebas con DOM/GATT simulados; navegador/radio/flash reales pendientes.
+Compare with live measurement no se implementa hasta esa validación.
+
+La caché de VIEW se invalida con REFRESH, LOG/DELETE y desconexión. La primera
+consulta del registro rápido no repite la cabecera CSV ni descarga otras filas.
+Con firmware anterior, las filas completas ya descargadas en REFRESH también se
+reutilizan para VIEW. Hay detección automática del transporte legacy y fallback
+si el host no entrega las lecturas largas completas. El CSV persistente no cambia:
+actualizar firmware y abrir el HTML regenerado, sin volver a subir `data/`.
+
+## Vista ajustada a la ventana
+
+El escritorio adapta automáticamente las vistas al alto y ancho disponibles
+(desde 960 × 560 CSS px). Histograma flexible, VIS y controles visibles juntos;
+Setup compacto; Data muestra tabla y gráfico lado a lado. Las filas de Data y
+los paneles Debug desplazan su contenido dentro del panel, sin alargar la página.
+En ventanas pequeñas se conserva scroll para no ocultar funciones ni reducir
+el texto con zoom. Basta abrir el HTML regenerado; no requiere actualizar FW.
+
+## Guardar Setup para el siguiente arranque
+
+APPLY CONFIGURATION ahora confirma aplicación y guardado NVS con el firmware
+actualizado. Tras reiniciar y reconectar, los campos se rellenan desde el setup
+recuperado y verificado por ESP32, incluido LED AUTO. Si solo falla guardar,
+CONFIG muestra los ajustes nuevos y el estado APPLIED / NOT SAVED pide reintentar
+APPLY; no afirma que se conservara la configuración anterior. Error 24 =
+CONFIG_SAVE_FAILED. No hay guardado en localStorage ni valores JS como fuente
+de verdad. [Detalles](../src/nevs_manager/README.md).

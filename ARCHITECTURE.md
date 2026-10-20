@@ -1,134 +1,169 @@
-# Arquitectura de la interfaz del TCS3448
-
-La [documentación global de la aplicación](README_APP.md) describe firmware,
-sensor, configuración, adquisición y protocolo. Este documento concreta la
-arquitectura de presentación y navegación, sin duplicar la referencia BLE.
-
-## Un documento, tres vistas
-
-La aplicación es una SPA ligera, sin framework ni dependencias externas:
+# Arquitectura TCS3448: firmware, BLE, web y capturas
 
 ```text
-web/dist/index.html
-    ├── #/measurement  → conexión, adquisición y última muestra
-    ├── #/setup        → configuración solicitada y configuración activa
-    └── #/debug        → resultados SMUX, estado tecnico y eventos BLE
-
-app.mjs       → una sola sesión GATT y lógica de comandos existente
-protocol.mjs  → formatos y decodificador existentes, sin cambios
-ui.mjs        → navegación, estados y presentación de datos
-style.css     → sistema visual compartido
+TCS3448Manager -> TCS3448Sample -> BLE SAMPLE -> Measurement
+                    |                            | LOG
+                    v                            v
+       CaptureBLE: historial + PIN congelado <- modal
+                    |
+                 DataStore -> LittleFS /data.csv
+                    |              |
+              GET / DELETE     CSV pull + CRC32
+                    |              |
+                    +-------> Data (SPA)
 ```
 
-No se crea `setup.html`. Navegar a otro archivo carga otro documento y no se
-pueden conservar de forma fiable las instancias GATT y suscripciones del actual.
-La [especificación Web Bluetooth](https://bluetooth.spec.whatwg.org/) vincula los
-objetos Bluetooth al contexto global. Cambiar el fragmento de URL conserva ese
-documento; la aplicación solo oculta/muestra vistas, sin reconectar ni enviar
-START/STOP. También permite enlaces directos y navegación atrás/adelante.
+## Firmware y fuente de verdad
 
-Abrir `index.html#/setup` inicia la aplicación en Setup, todavía sin conexión.
-El usuario puede ir a Measurement para conectar y regresar. Cambiar de vista no
-borra el formulario, la última muestra ni los objetos BLE. Recargar, cerrar la
-pestaña o abrir otra copia del HTML sí crea otra sesión.
+`main.cpp` coordina el manager, BLE y entrada serie. El manager conserva los
+ajustes reales confirmados por hardware y gobierna LED AUTO. SAMPLE v1 no cambia:
+48 bytes reconstruidos desde cuatro notificaciones de 20 bytes. STATUS v1 y
+CONFIG v3 conservan UUIDs, campos y comandos anteriores.
 
-## Responsabilidad de cada vista
+Antes de enviar una muestra, `CaptureBLE::Remember` copia muestra, configuración
+y ADC Full Scale reales en un anillo de 32 entradas. No consulta Adafruit desde
+DataStore ni toma una segunda lectura. La web congela secuencia/uptime al pulsar
+LOG y solicita PIN de esa secuencia antes de abrir el modal. Si la muestra ya
+no está retenida, NO_SAMPLE; nunca se sustituye por otra. PIN conserva una copia
+independiente del anillo: las notificaciones y cambios de setup posteriores no
+alteran la captura. STOP conserva la última muestra válida; desconexión invalida
+la elegibilidad para LOG. Un nuevo APPLY confirmado limpia la muestra visible.
 
-Measurement muestra el dispositivo, controles Connect/Disconnect/Start/Stop,
-estado de adquisición, canales físicos y resumen de la última muestra. Setup
-contiene los únicos campos editables y la configuración activa como filas de
-solo lectura, junto al control Read from device. Ambos comparten cabecera y
-estado de conexión, errores comprensibles y Advanced / Raw Debug en una tercera vista del menu lateral.
+Callbacks BLE solo encolan bytes. Las operaciones de datos, archivos y sensor
+se ejecutan en loop. El ACK de datos se guarda en una caché protegida: la lectura
+GATT no devuelve como ACK el eco de una escritura aún no procesada. Sesiones
+invalidan comandos, PIN, transferencia y respuestas de la conexión anterior.
 
-El resumen principal usa F1, F2, FZ, F3, F4, F5, FY, FXL, F6, F7, F8, NIR,
-VIS TL y VIS BR. Es una proyección de los nombres del protocolo, sin cambiar el
-mapping del firmware. VIS TL/BR representan el primer ciclo SMUX; no se promedian
-ni combinan los otros ciclos. Los canales no adquiridos aparecen como `—`, nunca
-como un cero inventado. Advanced Debug conserva los resultados originales válidos
-del modo activo (18 en SMUX18), estado técnico y los últimos 40 eventos BLE.
+## SPA y estados
 
-Gain y saturación del resumen vienen de la muestra. Integration se asocia a la
-configuración confirmada cuando se recibe; no es un campo adicional de SAMPLE.
-Si la configuración no está confirmada o APPLY está pendiente, se muestra `—`.
-Después de un APPLY correcto se limpia la muestra anterior y se espera una nueva,
-para no presentar una lectura antigua junto a los nuevos ajustes.
+Un HTML autocontenido generado desde `web/src`, sin dependencias de red. Rutas:
 
-## Estado y sistema visual
+| Ruta | Vista |
+| --- | --- |
+| `#/measurement` | Histograma RAW, START/STOP, LOG |
+| `#/setup` | Configuración solicitada y confirmada |
+| `#/data` | Saved captures, tabla, selección, replay, borrar, descargar |
+| `#/debug` | RAW SMUX, estado y mensajes BLE |
 
-Los estados del dispositivo siguen llegando del ESP32; la navegación no los
-simula ni los altera. STOPPED se presenta como IDLE y RUNNING conserva su nombre.
-VALID/SATURATED se calculan desde la muestra completa; errores de dispositivo
-prevalecen en el indicador de estado. Los códigos de error detallados permanecen
-en Advanced Debug y el mensaje principal explica la acción útil para el usuario.
+La navegación cambia hash/hidden, conserva una sola sesión Web Bluetooth,
+suscripciones, adquisición y formulario. Cabecera y menú sticky compartidos.
+`app.mjs` coordina conexión y busy; `captures.mjs` implementa el modal/tabla y
+transporte de datos. Configuración confirmada del ESP32 y CSV remoto son fuentes
+de verdad; el navegador no asigna IDs ni mantiene una base local de capturas.
 
-`web/src/style.css` centraliza variables para fondo marino, paneles, bordes,
-tipografía y colores semánticos: azul para actividad, verde para válido/conectado,
-ámbar para espera/advertencia, rojo para error/saturación y gris para inactivo.
-Siempre hay texto junto al color. Se usan fuentes del sistema, cifras tabulares,
-focus visible y el input real del switch LED. Se incluye un histograma SVG de counts RAW.
+LOG está habilitado con conexión y muestra válida, RUNNING o STOPPED. El modal
+muestra secuencia/uptime congelados, avisa de adquisición parada y admite
+80 bytes UTF-8 opcionales. CANCELAR no escribe. GUARDAR bloquea doble clic,
+espera el ACK persistente y solo entonces muestra ID y contador. Si se pierde
+el ACK, no se reintenta automáticamente: reconectar/refrescar Data para conocer
+el resultado. El token de PIN queda en la fila para deduplicar el commit.
 
-El diseño se adapta con grid/flex para escritorio, portátil y tablet; en pantallas
-estrechas apila Setup y reduce las columnas del readout. `hidden` elimina la vista
-inactiva del layout y de la navegación por teclado.
+Data lista IDs de más reciente a más antiguo, aunque el archivo sea ascendente.
+Se refresca desde ESP32 al reconectar. VIEW ejecuta GET_RECORD remoto y reproduce
+esa fila con su escala/ajustes históricos. Checkbox selecciona una o varias filas;
+la confirmación enumera IDs. Borrado valida todos antes de escribir y el cliente
+verifica la lista de IDs del recibo de ACK. Si desaparece la fila elegida se
+limpia el gráfico; desconectado queda identificado como Last loaded record.
 
-## Generación y verificación
+## Histograma compartido
 
-El [generador](scripts/README.md) integra los cuatro módulos y los estilos en un
-único HTML local. No se duplican estilos entre páginas. Las fuentes permanecen
-separadas y los BOM de UTF-8 se retiran antes de insertarlas en el documento.
+`ui.mjs::createRawHistogram` reutiliza `createSpectralChart` junto a las barras VIS
+para Measurement y Data. Se crean dos instancias del mismo componente, sin
+muestras ficticias. Mantiene orden, colores, MAX/MIN con empates, counts originales
+y ADC Full Scale fijo correspondiente a la muestra. SAT amarillo desde
+round(0.90 * escala), rojo desde round(0.95 * escala); VIS queda excluido.
+Los canales no adquiridos muestran raya, nunca cero inventado. VIS TL/BR son
+el ciclo 0; los ciclos adicionales siguen en RAW y en el CSV. El flag agregado de
+saturación no identifica canales ni permite inferir flags analógicos/digitales.
 
-Las comprobaciones de protocolo y configuración se conservan; las nuevas de UI
-verifican navegación durante RUNNING sin órdenes ni desconexión, edición conservada,
-recepción en la vista oculta, selección VIS y estados de muestra. La revisión visual
-en navegador puede usar datos simulados, pero la conexión y continuidad con el
-ESP32 deben comprobarse en hardware. Véase [Web README](web/README.md).
+## Persistencia e integridad
 
-## Spectral Measurement
+`DataStore` recorre y valida el único `/data.csv`; máximo 100 filas. IDs uint32
+reservados en Preferences/NVS antes de escribir: crecen tras reinicio y borrado
+total, con huecos admisibles ante fallo. Inserción 101 descarta solo la más antigua.
+Descripciones escapadas, UTF-8, cabecera única de 36 campos, uptime de adquisición,
+setup y full scale históricos; flags no disponibles = `unknown`.
 
-`app` entrega la muestra reconstruida a `ui.sample`, que actualiza el componente
-`web/src/spectral-chart.mjs`. El componente no accede a BLE. Su definición
-SPECTRAL_CHANNELS centraliza el orden F1, F2, FZ, F3, F4, F5, FY, FXL, F6, F7,
-F8, NIR y sus centros 407, 424, 450, 473, 516, 546, 560, 596, 636, 687, 748,
-855 nm. Busca por nombre y dibuja barras equidistantes. VIS TL/BR usan el primer
-ciclo y aparecen en una tarjeta separada; no afectan a la escala espectral.
+Partición existente `huge_app.csv`, 4 MiB, aplicación de 3 MiB y LittleFS de
+896 KiB, configurado con `board_build.filesystem`. Mount sin autoformat; si falla,
+se informa STORAGE_UNAVAILABLE y la adquisición sigue disponible. Se reescribe
+por streaming a temporal, valida tamaño/CRC/tipos/recuento, renombra original a
+respaldo, promueve temporal y verifica antes de ACK. Reinicio restaura respaldo
+si falta original; corrupción presente impide mutaciones destructivas.
 
-El SVG se crea una vez. Cada muestra actualiza alturas, valores y nombres
-accesibles; actualiza los extremos MAX/MIN de la muestra actual. El viewBox
-responde al ancho disponible sin reconstrucciones. La escala lineal va de cero a ADC Full Scale confirmado por firmware,
-sin autoescala. Cada muestra conserva su full scale asociado. Sin muestra no hay barras inventadas. STOP y desconexión
-conservan la última muestra; APPLY confirmado la limpia. Advanced Debug conserva
-los resultados originales. Véase el README web para API y pruebas.
+[DataStore README](src/DataStore/README.md) define **esquema CSV exacto**, tipos,
+provisión inicial, límites de RAM, IDs, fallos y recuperación. No hay calibración,
+registro periódico, sesiones, SD, Wi-Fi, HTTP ni base de datos.
 
-Setup ofrece LED AUTO ligado a RUNNING desde TCS3448Manager; no hay comandos
-LED adicionales desde el navegador. START enciende y verifica el LED; STOP,
-desconexion y fallo lo apagan. APPLY conserva la adquisicion previa y adapta
-el LED al modo solicitado. CONFIG v3 comunica OFF/ON/AUTO con el mismo payload
-de 20 bytes. Se mantienen lectura v2 y APPLY manual v2 por compatibilidad.
-VIS usa dos barras horizontales apiladas TL/BR, referidas a ADC Full Scale.
+## Protocolo y descarga
 
-## Navegacion lateral y controles compactos
+Nueva característica `34480006-7f2a-4f6c-9e31-8dbe0c2f5a70`, Read/Write con
+respuesta. Cada operación usa request32 y secuencia16; paquetes de 20 bytes
+para MTU ATT 23. PIN, STAGE, LOG, BEGIN/LIST/DOWNLOAD, NEXT, END, DELETE,
+GET_RECORD, RESET_STAGE y DELETE_RECEIPT. [Offsets exactos](src/ble/README.md#capturas-manuales).
 
-La cabecera conserva titulo, estado BLE y un unico CONNECT/DISCONNECT para ambas
-vistas. Measurement/Setup estan en un menu lateral. Se elimina la tarjeta Device;
-el histograma contiene adquisicion IDLE/RUNNING y un unico START/STOP. Los botones
-se actualizan en app.controls a partir de GATT y STATUS confirmados, y se bloquean
-con busy para impedir operaciones solapadas. Desconectar intenta STOP y siempre
-cierra GATT. Navegar conserva sesion, adquisicion, grafica y formulario.
+La ruta rápida separa tres consultas: LIST transmite solo ID, descripción,
+uptime, gain, integración y corriente LED; GET_RECORD transmite una sola fila
+sin repetir la cabecera; GET CSV transmite el archivo íntegro e idéntico.
+FAST_BEGIN (11) informa bytes/CRC/count y bloque de 504; FAST_NEXT (12) devuelve
+8 bytes de correlación y hasta 504 bytes de datos. Una lectura GATT larga obtiene
+hasta 512 bytes; el framework gestiona Read Blob si el MTU negociado es menor.
+El ESP32 ofrece MTU 517; el navegador/SO decide el valor efectivo.
 
-El panel espectral elimina tooltip y seleccion. spectralExtrema calcula extremos
-entre canales adquiridos de la muestra actual (sin VIS ni historico). La cabecera
-muestra canal, nm y counts de MAX/MIN; los nombres del eje X se colorean verde/azul
-y llevan una marca textual. Todos los empates se conservan; MAX tiene prioridad
-de color cuando tambien es MIN. ADC Counts se dibuja vertical junto al eje Y.
+El listado se proyecta por streaming en RAM acotada, sin otro archivo ni escritura
+de flash. GET_RECORD recorre hasta el ID solicitado, valida las filas leídas y
+no recalcula el CRC de todo el CSV. Las mutaciones mantienen su validación completa.
+El navegador verifica longitud/CRC antes de usar datos o crear Blob UTF-8 exacto.
+Conserva registros ya obtenidos en una caché por conexión, invalidada en REFRESH,
+LOG/DELETE y desconexión: repetir VIEW no transfiere nada. Si el firmware anterior
+solo ofrece LIST como CSV completo, reutiliza las filas verificadas para VIEW.
 
-Advanced / Raw Debug es una vista independiente (#/debug), fuera de Measurement
-y Setup. La navegacion comparte una tabla de tres rutas y conserva BLE y muestras;
-los datos de diagnostico se actualizan aunque Debug este oculto. Measurement
-comienza directamente en la tarjeta del histograma, sin titulo de vista previo.
+El protocolo anterior 4/5/8 permanece disponible. Se detecta firmware anterior
+por INVALID_PAYLOAD en FAST_BEGIN; si un host trunca lecturas largas se libera
+la transferencia y repite solo la lectura con bloques de 12 bytes. No se reintenta
+una mutación. END, desconexión o 15 s sin actividad liberan el bloqueo. La
+adquisición sigue funcionando y las mutaciones responden BUSY durante transferencia.
+El transporte rápido reduce hasta 42 veces las solicitudes de bloque, sin prometer
+ese factor en tiempo real: medir MTU/radio con la placa y el navegador.
 
-La informacion de medida esta centrada en la cabecera del histograma: Integration
-time, Gain y Current LED. Se elimina el resumen inferior y su badge global;
-secuencia y flag de saturacion original permanecen en Debug. SAT en rojo desde round(ADC Full Scale * 0.95) prevalece sobre SAT naranja naranja
-desde round(ADC Full Scale * 0.90), MAX verde y MIN azul.
-VIS no participa en SAT. El flag agregado de SAMPLE no identifica el canal:
-no se usa para colorear todos los espectrales ni para inferir saturacion analogica.
+## Verificación y trabajo pendiente
+
+`node scripts/build-web.mjs` genera `web/dist/index.html`. Tests JS de protocolo,
+Setup, navegación, renderer y capturas; tests nativos ejecutan DataStore y
+CaptureBLE de producción con FS/NVS/GATT/colas simulados. Incluyen FIFO,
+recuperación ante fallos, freeze, ACK diferido, idempotencia, CRC y aislamiento
+de sesiones. [Comandos y matriz hardware](test/README.md).
+
+La compilación PlatformIO y estos tests de software no validan flash/radio/I2C
+físicos. Pendientes: reset/cortes en cada fase, LED AUTO/adquisición concurrente,
+CSV idéntico en placa, reconexión y duración con 100 filas. La superposición
+Compare with live measurement queda **pendiente**, sin implementarla antes de
+cerrar esa validación. No se normalizan counts ni se interpreta RAW como absorbancia.
+
+## Ajuste automático al viewport
+
+En escritorio (viewport desde 960 × 560 CSS px), main distribuye el alto libre
+con flex/grid. Measurement comparte ese espacio entre cabecera de controles,
+SVG flexible y VIS; Setup reduce espaciado y mantiene dos columnas editables.
+Data coloca lista y replay lado a lado; solo la tabla desplaza sus filas, con
+cabecera fija. Debug conserva scroll dentro de sus paneles. No se usa zoom ni
+se transforma el documento para hacerlo caber: el SVG conserva proporciones.
+
+En ventanas más pequeñas se conserva el diseño responsive con desplazamiento
+para mantener controles y texto accesibles. Mensajes extensos y el modal tienen
+scroll local cuando lo requieren. La navegación y BLE no se modifican.
+
+## Setup persistente en NVS
+
+`src/nevs_manager/nvs_manager.h/.cpp` encapsula Preferences en namespace
+`tcs3448_setup`, clave `config`. main recupera un blob de 32 bytes validado
+(versión, CRC y ConfigMath) antes de inicializar el sensor. Si falta o falla,
+conserva defaults sin borrar NVS. Se almacenan los campos editables de Setup,
+incluido modo LED AUTO; bus I2C y RUNNING no se restauran desde NVS.
+
+APPLY_CONFIG aplica/verifica hardware y después guarda el GetConfig confirmado.
+El ACK de éxito espera el guardado y readback NVS. Un fallo de persistencia
+produce result=6/error=24 CONFIG_SAVE_FAILED: los ajustes ya están aplicados y
+la web muestra APPLIED / NOT SAVED. No se guardan peticiones rechazadas, estados
+transitorios LED ni muestras. Reaplicar ajustes idénticos evita reescribir.
+[NVS manager](src/nevs_manager/README.md) define formato, errores y pruebas.

@@ -13,7 +13,7 @@ class Characteristic extends EventTarget {
 }
 const html = readFileSync(new URL("../web/dist/index.html", import.meta.url), "utf8");
 const bundledScript = html.match(/<script>([\s\S]*?)<\/script>/)[1];
-async function setup({ ready = true, failSubscription = false, unsupported = false } = {}) {
+async function setup({ ready = true, failSubscription = false, unsupported = false, missingCaptures = false } = {}) {
   const dom = createTestDOM(html);
   const elements = dom.el;
   const state = { ready, acquiring: false, counter: 0, command: 0, result: 0 };
@@ -55,7 +55,10 @@ async function setup({ ready = true, failSubscription = false, unsupported = fal
     async connect() { this.connected = true; return this; },
     async getPrimaryService(uuid) {
       assert.equal(uuid, UUID.service);
-      return { getCharacteristic: async uuid => chars[uuid] };
+      return { getCharacteristic: async uuid => {
+        if (missingCaptures && uuid === UUID.captures) throw new DOMException("No Characteristics matching UUID", "NotFoundError");
+        return chars[uuid];
+      } };
     },
     disconnect() {
       if (!this.connected) return;
@@ -76,6 +79,20 @@ async function setup({ ready = true, failSubscription = false, unsupported = fal
   runInThisContext(bundledScript, { filename: "index.html" });
   return { el: elements, device, state, writes, status, statusValue };
 }
+
+test("firmware without CAPTURES preserves Measurement and Setup and explains disabled data operations", async () => {
+  const { el, device, state } = await setup({ missingCaptures: true });
+  await el.connect.click();
+  assert.equal(device.gatt.connected, true);
+  assert.equal(el.start.disabled, false);
+  assert.equal(el.apply.disabled, false);
+  assert.match(el.message.textContent, /firmware del hito 5B/);
+  assert.match(el["data-status"].textContent, /34480006/);
+  for (const id of ["log-capture", "data-refresh", "data-download", "data-delete"]) assert.equal(el[id].disabled, true);
+  await el.start.click(); assert.equal(state.acquiring, true);
+  await el.start.click(); assert.equal(state.acquiring, false);
+  device.gatt.disconnect();
+});
 
 test("connect, configuration, START, STOP and reconnect work through application acknowledgments", async () => {
   const { el, device, state, writes } = await setup();

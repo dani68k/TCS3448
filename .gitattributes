@@ -1,0 +1,2 @@
+# LittleFS CSV validator and download preserve LF bytes on every host.
+data/data.csv text eol=lf

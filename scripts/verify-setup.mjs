@@ -39,7 +39,7 @@ class Characteristic extends EventTarget {
   async startNotifications() { return this; }
   notify(value) { this.value = value; this.dispatchEvent(new Event("characteristicvaluechanged")); }
 }
-function setup({ ready = true, rejectApply = 0, holdApply = false, subscriptionFailure = false, unsupported = false, hash = "" } = {}) {
+function setup({ ready = true, rejectApply = 0, failSave = false, holdApply = false, subscriptionFailure = false, unsupported = false, hash = "" } = {}) {
   const dom = createTestDOM(html, hash);
   const el = dom.el;
   const state = { ready, acquiring: false, counter: 0, command: 0, result: 0, error: ready ? 0 : 1, config: defaults(), release: null };
@@ -79,6 +79,7 @@ function setup({ ready = true, rejectApply = 0, holdApply = false, subscriptionF
           const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
           state.config = { ...state.config, gainCode: bytes[2], smux: bytes[3], autozero: bytes[4], ledEnabled: bytes[5] === 1, ledAuto: bytes[5] === 2,
             ledCurrentMa: v.getUint16(6, true), integrationMs: 50.001, intervalMs: v.getUint32(12, true), adcFullScale: 17986, revision: state.config.revision + 1 };
+          if (failSave) { state.result = 6; state.error = 24; }
         }
       }
       if (name === "START") state.acquiring = state.ready;
@@ -423,6 +424,36 @@ test("view markup separates setup and debug and removes the measurement heading"
   assert.doesNotMatch(html, /<details/);
   assert.doesNotMatch(html, /HITO\s*4/i);
   assert.doesNotMatch(html, /Chart\.js|<canvas|<svg/);
+});
+
+test("NVS failure reports applied but not saved, retains new readback and clears old sample", async () => {
+  const { el, device, state, sample } = setup({failSave:true});
+  await el.connect.click(); await el.start.click();
+  for(const packet of samplePackets(18,1)) sample.notify(packet);
+  el.gain.value="8";
+  await el.apply.click();
+  assert.equal(state.config.gainCode,8);
+  assert.match(el.config.textContent,/128x/);
+  assert.match(el["config-state"].textContent,/APPLIED \/ NOT SAVED/);
+  assert.match(el.message.textContent,/could not be saved for restart/);
+  assert.equal(el.start.disabled,false);
+  assert.equal(el.apply.disabled,false);
+  device.gatt.disconnect();
+});
+
+test("Data navigation preserves the same BLE session and continues receiving samples", async () => {
+  const { el, device, state, writes, sample } = setup({hash:"#/data"});
+  assert.equal(el["data-view"].hidden,false);
+  await el.connect.click(); await el.start.click();
+  const before=writes.length;
+  await el["nav-measurement"].click(); await el["nav-data"].click();
+  assert.equal(el["nav-data"].getAttribute("aria-current"),"page");
+  assert.equal(device.gatt.connected,true); assert.equal(state.acquiring,true); assert.equal(writes.length,before);
+  for(const packet of samplePackets(18,1)) sample.notify(packet);
+  assert.match(el["summary-gain"].textContent,/64x/);
+  // This fixture exposes the original four characteristics, without CAPTURES.
+  assert.equal(el["log-capture"].disabled,true);
+  device.gatt.disconnect(); assert.equal(el["log-capture"].disabled,true);
 });
 
 test("Debug navigation and direct links preserve acquisition and keep receiving samples", async () => {

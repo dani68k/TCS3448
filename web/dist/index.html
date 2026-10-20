@@ -240,6 +240,97 @@ input:disabled, select:disabled, fieldset:disabled .switch { opacity: .45; curso
 
 .chart-near-sat { fill: #ffc247; color: #ffc247; }
 
+dialog { color:var(--text, #dce5eb); background:var(--surface, #161e27); border:1px solid #43515e; border-radius:10px; max-width:540px; width:90%; padding:24px; }
+dialog::backdrop { background:#000a; }
+dialog input { width:100%; margin:10px 0 20px; }
+.data-table { overflow-x:auto; margin-top:16px; }
+.data-table table { width:100%; border-collapse:collapse; font-size:13px; }
+.data-table th,.data-table td { padding:9px; text-align:left; border-bottom:1px solid #33404b; }
+.data-table td:nth-child(3) { max-width:220px; overflow-wrap:anywhere; }
+
+/* Fit the instrument to the available height; keep long lists inside their panel. */
+.data-list-card, .saved-record-card { padding: 16px; min-width: 0; }
+.data-list-card .measurement-actions { flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
+.data-list-card .card-heading { margin-bottom: 8px; }
+#data-status { font-size: 12px; color: var(--text-secondary); margin-top: 8px; overflow-wrap: anywhere; }
+.saved-record-card { margin-top: 14px; }
+.saved-record-card h2 { overflow-wrap: anywhere; }
+.saved-record-card .hint { margin: 6px 0; }
+.data-table thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-panel); }
+dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+
+@media (min-width: 960px) and (min-height: 560px) {
+  .header-inner { min-height: 60px; padding: 8px 20px; }
+  .app-layout { grid-template-columns: 145px minmax(0, 1fr); }
+  .sidebar { padding: 14px 0; }
+  .main-nav { gap: 4px; }
+  .main-nav a { padding: 10px 12px; font-size: 12px; }
+  .instrument-main { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; }
+  #measurement-view, #setup-view, #debug-view { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .instrument-footer { flex-shrink: 0; margin-top: 0; padding-top: 6px; }
+  .support-note, .message { flex-shrink: 0; margin-top: 0; }
+  .message { padding: 8px 12px; max-height: 20vh; overflow-y: auto; }
+  .page-heading { flex-shrink: 0; margin-bottom: 10px; gap: 12px; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 16px; }
+  .eyebrow { margin-bottom: 4px; }
+  .button { min-height: 32px; padding: 6px 12px; }
+  .measurement-card, .setup-card, .active-card { padding: clamp(10px, 1.8vh, 18px); }
+  .card-heading { gap: 12px; margin-bottom: 12px; }
+  .measurement-card { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .measurement-card .card-heading { flex-shrink: 0; }
+  .measurement-settings { gap: 18px; }
+  .measurement-settings dd { font-size: 14px; }
+  .measurement-actions { gap: 10px; }
+  .measurement-actions .button { min-width: 68px; }
+  .spectral-chart { flex: 1; min-height: 0; }
+  .spectral-chart svg { height: 100%; min-height: 0; overflow: hidden; }
+  .vis-card { flex-shrink: 0; margin-top: 10px; padding: 10px 18px; }
+  .vis-readout { gap: 8px; }
+  .vis-meter { height: 12px; }
+  .vis-row .reading-value { font-size: 16px; }
+  .readout-note { margin-top: 6px; }
+
+  .setup-layout { flex: 1; min-height: min-content; align-items: stretch; gap: 14px; }
+  .setup-card, .active-card { display: flex; flex-direction: column; }
+  .setup-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+  .setup-grid label:not(.switch) { gap: 4px; font-size: 11px; }
+  input:not([type="checkbox"]), select { min-height: 32px; padding: 6px 9px; }
+  .switch, .led-auto-field > span:last-child { min-height: 32px; }
+  .led-field > .label { margin-bottom: 4px; }
+  .setup-footer { margin-top: 12px; padding-top: 10px; }
+  .setup-footer .button { margin-top: 8px; }
+  .config-row { padding: 8px 0; gap: 10px; }
+  .configuration-status { margin: 12px 0; }
+  .configuration-status .hint { margin-top: 4px; }
+  .active-card > .button { margin-top: auto; }
+  .notice { padding: 0 0 8px; font-size: 12px; }
+
+  #data-view { display: grid; grid-template-columns: minmax(340px, .95fr) minmax(0, 1.1fr); gap: 14px; flex: 1; min-height: 0; }
+  .data-list-card, .saved-record-card { display: flex; flex-direction: column; min-height: 0; padding: 12px; }
+  .data-list-card > :not(.data-table), .saved-record-card > :not(.spectral-chart) { flex-shrink: 0; }
+  .data-list-card .measurement-actions { margin-top: 8px; }
+  .data-table { flex: 1; min-height: 0; overflow: auto; margin-top: 8px; overscroll-behavior: contain; }
+  .data-table table { font-size: 11px; }
+  .data-table th, .data-table td { padding: 6px; }
+  .data-table td:nth-child(3) { max-width: 150px; }
+  .saved-record-card { margin-top: 0; }
+  .saved-record-card .chart-extrema { font-size: 11px; margin: 4px 0; }
+  .saved-record-card .vis-readout { margin-top: 6px; }
+
+  .debug-content { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr) minmax(0, .8fr); gap: 12px 24px; padding: 12px 16px; margin-top: 0; }
+  .debug-content > div { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .debug-content pre { flex: 1; min-height: 0; overflow: auto; }
+  .debug-log-section pre { max-height: none; }
+}
+
+@media (min-width: 960px) and (min-height: 560px) and (max-height: 640px) {
+  .setup-grid { gap: 6px 12px; }
+  .setup-footer { margin-top: 8px; padding-top: 8px; }
+  .setup-card .card-heading, .active-card .card-heading { margin-bottom: 8px; }
+  .config-row { padding: 6px 0; }
+}
+
   </style>
 </head>
 <body>
@@ -259,13 +350,14 @@ input:disabled, select:disabled, fieldset:disabled .switch { opacity: .45; curso
       <nav class="main-nav" aria-label="Main navigation">
         <a id="nav-measurement" href="#/measurement" aria-current="page">Measurement</a>
         <a id="nav-setup" href="#/setup" aria-current="false">Setup</a>
+        <a id="nav-data" href="#/data" aria-current="false">Data</a>
         <a id="nav-debug" href="#/debug" aria-current="false">Advanced / Raw Debug</a>
       </nav>
     </aside>
   <main id="main-content" class="instrument-main" tabindex="-1">
     <div id="measurement-view">
       <section class="card measurement-card" aria-label="Spectral RAW counts">
-        <div class="card-heading"><div id="spectral-extrema" class="chart-extrema" aria-label="Current sample maximum and minimum"></div><dl class="measurement-settings" aria-label="Measurement settings"><div><dt>Integration time</dt><dd id="summary-integration">—</dd></div><div><dt>Gain</dt><dd id="summary-gain">—</dd></div><div><dt>Current LED</dt><dd id="summary-led-current">—</dd></div></dl><div class="measurement-actions"><span id="acquisition-state" class="status-badge" data-state="muted" role="status">IDLE</span><button id="start" class="button button-primary" disabled>START</button></div></div>
+        <div class="card-heading"><div id="spectral-extrema" class="chart-extrema" aria-label="Current sample maximum and minimum"></div><dl class="measurement-settings" aria-label="Measurement settings"><div><dt>Integration time</dt><dd id="summary-integration">—</dd></div><div><dt>Gain</dt><dd id="summary-gain">—</dd></div><div><dt>Current LED</dt><dd id="summary-led-current">—</dd></div></dl><div class="measurement-actions"><span id="acquisition-state" class="status-badge" data-state="muted" role="status">IDLE</span><button id="start" class="button button-primary" disabled>START</button><button id="log-capture" class="button button-secondary" disabled>LOG</button></div></div>
         <div id="spectral-chart" class="spectral-chart"></div>
       </section>
       <section class="card vis-card" aria-labelledby="vis-title">
@@ -303,6 +395,21 @@ input:disabled, select:disabled, fieldset:disabled .switch { opacity: .45; curso
         </section>
       </div>
     </div>
+    <div id="data-view" hidden>
+      <section class="card data-list-card">
+        <div class="card-heading"><h1>Saved captures</h1><span id="data-count">— / 100</span></div>
+        <p class="hint">Most recent ID first · timestamp = ESP32 uptime</p>
+        <div class="measurement-actions"><button id="data-refresh" class="button button-secondary" disabled>REFRESH</button><button id="data-download" class="button button-secondary" disabled>DOWNLOAD CSV</button><button id="data-delete" class="button button-stop" disabled>DELETE SELECTED</button></div>
+        <p id="data-status" role="status">DISCONNECTED</p><button id="data-cancel" class="button button-secondary">CANCEL TRANSFER</button>
+        <div class="data-table"><table><thead><tr><th>Select</th><th>ID</th><th>Description</th><th>Uptime</th><th>Gain</th><th>Integration</th><th>LED current</th><th>Action</th></tr></thead><tbody id="data-rows"></tbody></table></div>
+      </section>
+      <section class="card saved-record-card"><h2 id="saved-title">Select a saved record</h2><p id="saved-setup" class="hint"></p><div id="saved-extrema" class="chart-extrema"></div><div id="saved-chart" class="spectral-chart"></div><dl id="saved-vis" class="vis-readout"></dl></section>
+    </div>
+    <dialog id="capture-dialog" aria-labelledby="capture-title">
+      <h2 id="capture-title">Guardar captura</h2><p id="capture-status" role="status"></p>
+      <label for="capture-description">Descripción (opcional)<input id="capture-description" type="text" maxlength="80" autocomplete="off"></label>
+      <div class="measurement-actions"><button id="capture-cancel" class="button button-secondary">CANCELAR</button><button id="capture-save" class="button button-primary" disabled>GUARDAR</button></div>
+    </dialog>
     <p id="support" class="support-note"></p>
     <p id="message" class="message" role="alert"></p>
     <section id="debug-view" hidden aria-labelledby="debug-title">
@@ -324,6 +431,7 @@ const UUID = Object.freeze({
   status: "34480002-7f2a-4f6c-9e31-8dbe0c2f5a70",
   command: "34480003-7f2a-4f6c-9e31-8dbe0c2f5a70",
   sample: "34480004-7f2a-4f6c-9e31-8dbe0c2f5a70",
+  captures: "34480006-7f2a-4f6c-9e31-8dbe0c2f5a70",
   config: "34480005-7f2a-4f6c-9e31-8dbe0c2f5a70",
 });
 const COMMAND = Object.freeze({ START: 1, STOP: 2, GET_STATUS: 3, GET_CONFIG: 4, APPLY_CONFIG: 5 });
@@ -339,6 +447,7 @@ const ERRORS = Object.freeze({
   16: "INVALID_GAIN", 17: "INVALID_INTEGRATION", 18: "INVALID_LED_CURRENT",
   19: "INVALID_SMUX_MODE", 20: "INVALID_AUTOZERO", 21: "INVALID_SAMPLE_PERIOD",
   22: "SAMPLE_PERIOD_TOO_SHORT", 23: "INVALID_CONFIG_PAYLOAD",
+  24: "CONFIG_SAVE_FAILED",
 });
 
 function validate(value, size, version = 1) {
@@ -528,6 +637,43 @@ function physicalReadings(sample) {
   }));
 }
 
+function createRawHistogram(host, extrema, visHost) {
+  const node=(tag, className, text)=>{ const e=document.createElement(tag); e.className=className; e.textContent=text; return e; };
+  const dash="\u2014";
+  const chart=createSpectralChart(host,extrema);
+  const visRows = new Map(["VIS TL", "VIS BR"].map(name => {
+    const row = node("div", "vis-row");
+    const value = node("dd", "reading-value", dash);
+    const meter = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    meter.setAttribute("viewBox", "0 0 100 6");
+    meter.setAttribute("class", "vis-meter");
+    meter.setAttribute("preserveAspectRatio", "none");
+    meter.setAttribute("role", "img");
+    const track = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    const fill = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    for (const rect of [track, fill]) { rect.setAttribute("height", 6); rect.setAttribute("rx", 2); }
+    track.setAttribute("width", 100); track.setAttribute("class", "vis-track");
+    fill.setAttribute("width", 0); fill.setAttribute("class", "vis-fill");
+    meter.append(track, fill);
+    row.append(node("dt", "channel-name", name), value);
+    // Keep the visual level outside dd: updating its text must not remove the SVG.
+    row.append(meter);
+    visHost.append(row);
+    return [name, {value, meter, fill}];
+  }));
+  function update(sample, fullScale) {
+    chart.update(sample, fullScale);
+    for (const {name, value} of physicalReadings(sample).filter(c => c.name.startsWith("VIS"))) {
+      const item = visRows.get(name);
+      item.value.textContent = value === null ? dash : `${value} counts`;
+      item.fill.setAttribute("width", fullScale ? Math.min(value ?? 0, fullScale) / fullScale * 100 : 0);
+      item.meter.setAttribute("aria-label", `${name}: ${value === null ? "Not acquired" : `${value} counts`}`);
+    }
+  }
+
+  return {update};
+}
+
 function createInstrumentUI(el) {
   const node = (tag, className, text) => {
     const element = document.createElement(tag);
@@ -540,7 +686,7 @@ function createInstrumentUI(el) {
     element.dataset.state = state;
   };
   const dash = "\u2014";
-  const chart = createSpectralChart(el["spectral-chart"], el["spectral-extrema"]);
+  const histogram = createRawHistogram(el["spectral-chart"], el["spectral-extrema"], el["sample-readout"]);
   const logs = [];
   let lastStatusKey = "";
   let lastSample = null;
@@ -552,7 +698,7 @@ function createInstrumentUI(el) {
     if (logs.length > 40) logs.shift();
     el["debug-log"].textContent = logs.join("\n");
   };
-  const views = { measurement: "Measurement", setup: "Sensor Setup", debug: "Advanced / Raw Debug" };
+  const views = { measurement: "Measurement", setup: "Sensor Setup", data: "Saved captures", debug: "Advanced / Raw Debug" };
   function showView(view, updateHash = false) {
     const active = Object.hasOwn(views, view) ? view : "measurement";
     for (const key of Object.keys(views)) {
@@ -572,36 +718,7 @@ function createInstrumentUI(el) {
   });
   showView(window.location.hash.slice(2));
 
-  const visRows = new Map(["VIS TL", "VIS BR"].map(name => {
-    const row = node("div", "vis-row");
-    const value = node("dd", "reading-value", dash);
-    const meter = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    meter.setAttribute("viewBox", "0 0 100 6");
-    meter.setAttribute("class", "vis-meter");
-    meter.setAttribute("preserveAspectRatio", "none");
-    meter.setAttribute("role", "img");
-    const track = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    const fill = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    for (const rect of [track, fill]) { rect.setAttribute("height", 6); rect.setAttribute("rx", 2); }
-    track.setAttribute("width", 100); track.setAttribute("class", "vis-track");
-    fill.setAttribute("width", 0); fill.setAttribute("class", "vis-fill");
-    meter.append(track, fill);
-    row.append(node("dt", "channel-name", name), value);
-    // Keep the visual level outside dd: updating its text must not remove the SVG.
-    row.append(meter);
-    el["sample-readout"].append(row);
-    return [name, {value, meter, fill}];
-  }));
-  function readings(sample) {
-    chart.update(sample, sampleFullScale ?? confirmedFullScale);
-    for (const {name, value} of physicalReadings(sample).filter(c => c.name.startsWith("VIS"))) {
-      const item = visRows.get(name);
-      item.value.textContent = value === null ? dash : `${value} counts`;
-      const fullScale = sampleFullScale ?? confirmedFullScale;
-      item.fill.setAttribute("width", fullScale ? Math.min(value ?? 0, fullScale) / fullScale * 100 : 0);
-      item.meter.setAttribute("aria-label", `${name}: ${value === null ? "Not acquired" : `${value} counts`}`);
-    }
-  }
+  const readings = sample => histogram.update(sample, sampleFullScale ?? confirmedFullScale);
 
   function measurementSettings(integrationMs, gain, ledCurrentMa) {
     el["summary-integration"].textContent = Number.isFinite(integrationMs) ? `${integrationMs.toFixed(3)} ms` : dash;
@@ -669,7 +786,233 @@ function createInstrumentUI(el) {
 }
 
 
-const ids = ["connect", "start", "refresh", "apply", "setup", "gain", "integration", "led-current", "led-enabled", "led-auto", "smux", "autozero", "period", "connection", "support", "status", "config", "config-state", "sample", "received", "message", "nav-measurement", "nav-setup", "nav-debug", "debug-view", "measurement-view", "setup-view", "setup-connect-link", "setup-disconnected", "acquisition-state", "device-name", "sample-readout", "spectral-chart", "summary-led-current", "summary-gain", "summary-integration", "spectral-extrema", "debug-log", "config-detail", "led-label"];
+const CSV_HEADER = "record_id,description,timestamp_ms,gain,integration_ms,led_current_ma,led_mode,auto_smux,autozero,sample_period_ms,adc_full_scale,f1,f2,fz,f3,f4,f5,fy,fxl,f6,f7,f8,nir,vis_tl,vis_br,valid,analog_saturation,digital_saturation,sequence,channel_count,request_id,saturated,vis_tl_1,vis_br_1,vis_tl_2,vis_br_2";
+const CAPTURE_ERRORS = ["OK", "NO_SAMPLE", "INVALID_DESCRIPTION", "STORAGE_UNAVAILABLE", "STORAGE_FULL", "RECORD_NOT_FOUND", "INVALID_RECORD_IDS", "BUSY", "CSV_CORRUPT", "WRITE_FAILED", "TRANSFER_FAILED", "INVALID_PAYLOAD"];
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const b of bytes) { crc ^= b; for (let i=0;i<8;i++) crc=(crc>>>1) ^ ((crc&1)?0xedb88320:0); }
+  return (~crc)>>>0;
+}
+const SUMMARY_HEADER = "record_id,description,timestamp_ms,gain,integration_ms,led_current_ma";
+function parseCSV(bytes, header) {
+  const text = new TextDecoder("utf-8", { fatal:true }).decode(bytes);
+  const lines = text.split("\n");
+  if (lines.shift() !== header || lines.pop() !== "" || lines.length>100) throw new Error("CSV_CORRUPT");
+  let previous=0;
+  return lines.map(line => {
+    const fields=[]; let i=0;
+    while (i<=line.length) {
+      let field="";
+      if (line[i]==='"') {
+        i++; let closed=false;
+        while(i<line.length) { const c=line[i++]; if(c==='"') { if(line[i]==='"') { field+='"'; i++; } else { closed=true; break; } } else field+=c; }
+        if(!closed || (i<line.length && line[i]!==',')) throw new Error("CSV_CORRUPT");
+      } else { while(i<line.length && line[i]!==',') { if(line[i]==='"') throw new Error("CSV_CORRUPT"); field+=line[i++]; } }
+      fields.push(field); if(i===line.length) break; i++;
+    }
+    if(fields.length!==header.split(",").length) throw new Error("CSV_CORRUPT");
+    const r=Object.fromEntries(header.split(",").map((name,i)=>[name,fields[i]]));
+    r.id=Number(r.record_id);
+    if(!Number.isSafeInteger(r.id)||r.id<=previous||r.id>0xffffffff) throw new Error("CSV_CORRUPT");
+    previous=r.id;
+    return r;
+  });
+}
+function parseSummaries(bytes) { return parseCSV(bytes, SUMMARY_HEADER); }
+function parseCaptures(bytes) {
+  return parseCSV(bytes, CSV_HEADER).map(r=>{
+    const names=["F1","F2","FZ","F3","F4","F5","FY","FXL","F6","F7","F8","NIR","VIS_TL_0","VIS_BR_0","VIS_TL_1","VIS_BR_1","VIS_TL_2","VIS_BR_2"];
+    const keys=["f1","f2","fz","f3","f4","f5","fy","fxl","f6","f7","f8","nir","vis_tl","vis_br","vis_tl_1","vis_br_1","vis_tl_2","vis_br_2"];
+    r.sample={ sequence:Number(r.sequence), timestampMs:Number(r.timestamp_ms), gain:Number(r.gain), saturated:r.saturated==="1", channelCount:Number(r.channel_count), channels:names.flatMap((name,i)=>r[keys[i]]===""?[]:[[name,Number(r[keys[i]])]]) };
+    return r;
+  });
+}
+
+class CaptureTransport {
+  constructor(getChannel, linked, progress=()=>{}) { this.getChannel=getChannel; this.linked=linked; this.progress=progress; this.counter=globalThis.crypto.getRandomValues(new Uint32Array(1))[0]; }
+  async rpc(op, payload=new Uint8Array(), sequence=0) {
+    const channel=this.getChannel();
+    if(!channel||!this.linked()) throw new Error("DISCONNECTED");
+    const request=(++this.counter)>>>0 || ++this.counter;
+    const packet=new Uint8Array(20), view=new DataView(packet.buffer);
+    packet[0]=op; view.setUint32(2,request,true); view.setUint16(6,sequence,true); packet.set(payload,8);
+    await channel.writeValueWithResponse(packet);
+    const deadline=Date.now()+6000;
+    while(Date.now()<deadline) {
+      if(this.getChannel()!==channel||!this.linked()) throw new Error("DISCONNECTED");
+      const result=await channel.readValue();
+      if((op===12 ? result.byteLength>=8 && result.byteLength<=512 : result.byteLength===20) && result.getUint8(0)===op && result.getUint32(2,true)===request && result.getUint16(6,true)===sequence) {
+        if(result.getUint8(1)) throw new Error(CAPTURE_ERRORS[result.getUint8(1)]||"TRANSFER_FAILED");
+        return {view:result, request};
+      }
+      await new Promise(resolve=>setTimeout(resolve,25));
+    }
+    throw new Error("ACK_TIMEOUT — resultado desconocido; refrescar Data antes de otra captura");
+  }
+  async stage(bytes) {
+    if(bytes.length>400) throw new Error("INVALID_PAYLOAD");
+    for(let i=0;i<bytes.length;i+=9) {
+      const payload=new Uint8Array(12); new DataView(payload.buffer).setUint16(0,i,true);
+      payload[2]=Math.min(9,bytes.length-i); payload.set(bytes.subarray(i,i+9),3);
+      await this.rpc(2,payload);
+    }
+  }
+  async list() {
+    const {bytes, fast}=await this.transfer(1);
+    return fast ? parseSummaries(bytes) : parseCaptures(bytes);
+  }
+  async record(id) {
+    const {bytes, fast}=await this.transfer(2,id);
+    let csv=bytes;
+    if(fast) { const header=new TextEncoder().encode(CSV_HEADER+"\n"); csv=new Uint8Array(header.length+bytes.length); csv.set(header); csv.set(bytes,header.length); }
+    const records=parseCaptures(csv);
+    if(records.length!==1 || records[0].id!==id) throw new Error("RECORD_NOT_FOUND");
+    return records[0];
+  }
+  async download() { return (await this.transfer(0)).bytes; }
+  async transfer(kind=0,id=0) {
+    try { return await this.readTransfer(kind,id); }
+    catch(error) {
+      // A few host Bluetooth stacks expose only the first ATT read fragment.
+      // This retry is read-only and occurs after END has released the first transfer.
+      if(this.fast===true && error.message==="TRANSFER_FAILED: chunk length") {
+        this.fast=false; return this.readTransfer(kind,id);
+      }
+      throw error;
+    }
+  }
+  async readTransfer(kind=0,id=0) {
+    this.cancelled=false;
+    const payload=new Uint8Array(4); new DataView(payload.buffer).setUint32(0,id,true);
+    let begin, fast=false;
+    if(this.fast!==false) {
+      const request=new Uint8Array(8); request[0]=kind; new DataView(request.buffer).setUint32(4,id,true);
+      try { begin=await this.rpc(11,request); fast=true; this.fast=true; }
+      catch(error) { if(this.fast===undefined && error.message==="INVALID_PAYLOAD") this.fast=false; else throw error; }
+    }
+    if(!fast) begin=await this.rpc(kind===2?8:4,payload);
+    const stride=fast?begin.view.getUint16(18,true):12;
+    const size=begin.view.getUint32(8,true), expected=begin.view.getUint32(12,true);
+    try {
+      if(size>71000 || size<1 || (fast && stride!==504)) throw new Error("TRANSFER_FAILED");
+      const bytes=new Uint8Array(size);
+      this.progress(0,size);
+      for(let offset=0;offset<size;offset+=stride) {
+        if(this.cancelled) throw new Error("TRANSFER_CANCELLED");
+        const next=new Uint8Array(8), v=new DataView(next.buffer);
+        v.setUint32(0,offset,true); v.setUint32(4,begin.request,true);
+        const {view}=await this.rpc(fast?12:5,next,offset/stride);
+        const length=Math.min(stride,size-offset);
+        if(fast && view.byteLength!==8+length) throw new Error("TRANSFER_FAILED: chunk length");
+        bytes.set(new Uint8Array(view.buffer,view.byteOffset+8,length),offset);
+        this.progress(Math.min(size,offset+stride),size);
+      }
+      if(this.cancelled) throw new Error("TRANSFER_CANCELLED");
+      if(crc32(bytes)!==expected) throw new Error("TRANSFER_FAILED: CRC32");
+      return {bytes, fast};
+    } finally {
+      this.progress(0,0);
+      const end=new Uint8Array(4); new DataView(end.buffer).setUint32(0,begin.request,true);
+      if(this.linked()) await this.rpc(6,end);
+    }
+  }
+}
+
+function createCaptureUI({ getChannel, linked, running, action }) {
+  const get=id=>document.getElementById(id);
+  const text=(id,value)=>{ get(id).textContent=value; };
+  const histogram=createRawHistogram(get("saved-chart"),get("saved-extrema"),get("saved-vis"));
+  const transport=new CaptureTransport(getChannel,linked,(n,total)=>{ get("data-cancel").hidden=!total; if(total) text("data-status",`Descargando ${n} / ${total} bytes`); });
+  get("data-cancel").hidden=true;
+  const recordCache=new Map();
+  let latest=null, frozen=null, pin=0, records=[], selected=null, blocked=false;
+  function controls(busy=blocked) {
+    blocked=busy;
+    get("log-capture").disabled=busy||!linked()||!latest;
+    for(const id of ["data-refresh","data-download","data-delete"]) get(id).disabled=busy||!linked()||(id==="data-delete"&&!checks().length);
+    get("capture-save").disabled=busy||!linked()||!pin;
+  }
+  function checks() { return records.filter(r=>r.checkbox?.checked).map(r=>r.id); }
+  function fail(error) { text("data-status",error.message); text("capture-status",error.message); throw error; }
+  async function refresh() {
+    recordCache.clear();
+    try {
+      records=await transport.list();
+      // Old firmware lists full rows: reuse those verified remote snapshots too.
+      for(const record of records) if(record.sample) recordCache.set(record.id,record);
+      text("data-count",`${records.length} / 100`);
+      get("data-rows").replaceChildren(...[...records].reverse().map(r=>{
+        const row=document.createElement("tr"), box=document.createElement("input"); box.type="checkbox"; box.setAttribute("aria-label",`Seleccionar #${r.id}`); r.checkbox=box;
+        box.addEventListener("change",()=>controls());
+        const cell=document.createElement("td"); cell.append(box); row.append(cell);
+        for(const value of [r.id,r.description,`${r.timestamp_ms} ms`,`${r.gain}x`,`${r.integration_ms} ms`,`${r.led_current_ma} mA`]) { const td=document.createElement("td"); td.textContent=String(value); row.append(td); }
+        const td=document.createElement("td"), button=document.createElement("button"); button.textContent="VIEW"; button.className="button button-secondary";
+        button.addEventListener("click",()=>action(async()=>{ try { const full=recordCache.get(r.id) ?? await transport.record(r.id); recordCache.set(r.id,full); if(!full||full.id!==r.id) throw new Error("RECORD_NOT_FOUND"); selected=r.id; histogram.update(full.sample,Number(full.adc_full_scale)); text("saved-title",`Saved record #${full.id} — ${full.description}`); text("saved-setup",`${full.gain}x · ${full.integration_ms} ms · LED ${full.led_current_ma} mA ${full.led_mode} · SMUX ${full.auto_smux} · AZ ${full.autozero} · period ${full.sample_period_ms} ms · ADC ${full.adc_full_scale} · uptime ${full.timestamp_ms} ms`); text("data-status","Registro cargado desde ESP32"); } catch(e) { fail(e); } }));
+        td.append(button); row.append(td); return row;
+      }));
+      if(selected&&!records.some(r=>r.id===selected)) { selected=null; histogram.update(null); text("saved-title","Select a saved record"); text("saved-setup",""); }
+      else if(selected) text("saved-title",`Last loaded record #${selected} — ${records.find(r=>r.id===selected).description}`);
+      text("data-status","LittleFS disponible · más recientes primero");
+    } catch(e) { fail(e); }
+  }
+  get("log-capture").addEventListener("click",()=>{
+    frozen=latest; // Freeze before the first await; new notifications cannot change this reference.
+    action(async()=>{
+      try {
+        const payload=new Uint8Array(4); new DataView(payload.buffer).setUint32(0,frozen.sequence,true);
+        const ack=await transport.rpc(1,payload); pin=ack.request;
+        get("capture-description").value="";
+        text("capture-status",`Muestra #${frozen.sequence} · uptime ${frozen.timestampMs} ms${running()?"":" · adquisición parada: última muestra visible"}. Descripción opcional, máximo 80 bytes UTF-8.`);
+        get("capture-dialog").showModal();
+      } catch(e) { fail(e); }
+    });
+  });
+  get("capture-cancel").addEventListener("click",()=>{ get("capture-dialog").close(); pin=0; frozen=null; });
+  get("capture-save").addEventListener("click",()=>action(async()=>{
+    try {
+      const description=get("capture-description").value, bytes=new TextEncoder().encode(description);
+      if(bytes.length>80||/[\x00-\x1f\x7f]/.test(description)) throw new Error("INVALID_DESCRIPTION: máximo 80 bytes, sin saltos de línea");
+      text("capture-status","Guardando…"); get("capture-cancel").disabled=true;
+      await transport.stage(bytes);
+      const payload=new Uint8Array(6), v=new DataView(payload.buffer); v.setUint32(0,pin,true); v.setUint16(4,bytes.length,true);
+      const ack=await transport.rpc(3,payload);
+      recordCache.clear();
+      pin=0; frozen=null; get("capture-dialog").close();
+      const message=`Registro #${ack.view.getUint32(8,true)} guardado · ${ack.view.getUint16(12,true)} / 100`;
+      text("message",message); await refresh(); text("data-status",message);
+    } catch(e) { pin=0; get("capture-dialog").close(); fail(e); }
+    finally { get("capture-cancel").disabled=false; }
+  }));
+  get("capture-dialog").addEventListener("cancel",event=>{ if(blocked) event.preventDefault(); else { pin=0; frozen=null; } });
+  get("data-refresh").addEventListener("click",()=>action(refresh));
+  get("data-cancel").addEventListener("click",()=>{ transport.cancelled=true; });
+  get("data-download").addEventListener("click",()=>action(async()=>{
+    try {
+      const bytes=await transport.download();
+      const url=URL.createObjectURL(new Blob([bytes],{type:"text/csv;charset=utf-8"}));
+      const a=document.createElement("a"); a.href=url; a.download="data.csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+      text("data-status",`CSV verificado: ${bytes.length} bytes`);
+    } catch(e) { fail(e); }
+  }));
+  get("data-delete").addEventListener("click",()=>{
+    const ids=checks(); if(!ids.length||!window.confirm(`¿Borrar ${ids.length} capturas? IDs: ${ids.join(", ")}`)) return;
+    action(async()=>{ try {
+      await transport.rpc(9); const bytes=new Uint8Array(ids.length*4), v=new DataView(bytes.buffer); ids.forEach((id,i)=>v.setUint32(i*4,id,true)); await transport.stage(bytes);
+      const payload=new Uint8Array(2); new DataView(payload.buffer).setUint16(0,ids.length,true);
+      const ack=await transport.rpc(7,payload); recordCache.clear(); if(ack.view.getUint16(10,true)!==ids.length) throw new Error("TRANSFER_FAILED");
+      for(let offset=0;offset<bytes.length;offset+=12) {
+        const p=new Uint8Array(8), view=new DataView(p.buffer); view.setUint32(0,offset,true); view.setUint32(4,ack.request,true);
+        const receipt=await transport.rpc(10,p,offset/12);
+        for(let i=0;i<Math.min(12,bytes.length-offset);++i) if(receipt.view.getUint8(8+i)!==bytes[offset+i]) throw new Error("TRANSFER_FAILED: DELETE receipt");
+      }
+      await refresh(); text("data-status",`Borrados IDs ${ids.join(", ")} · ${ack.view.getUint16(8,true)} / 100`);
+    } catch(e) { fail(e); } });
+  });
+  return {controls, refresh, unavailable:message=>{text("data-status",message); controls();}, sample:s=>{latest=s; controls();}, clearSample:()=>{latest=null; controls();}, disconnect:()=>{ recordCache.clear(); transport.fast=undefined; latest=frozen=null; pin=0; get("capture-dialog").close(); text("data-status","DISCONNECTED · lista anterior, refrescar al reconectar"); if(selected) text("saved-title",`Last loaded record #${selected} · disconnected`); controls(); }};
+}
+
+
+const ids = ["connect", "start", "refresh", "apply", "setup", "gain", "integration", "led-current", "led-enabled", "led-auto", "smux", "autozero", "period", "connection", "support", "status", "config", "config-state", "sample", "received", "message", "nav-measurement", "nav-setup", "nav-data", "data-view", "nav-debug", "debug-view", "measurement-view", "setup-view", "setup-connect-link", "setup-disconnected", "acquisition-state", "device-name", "sample-readout", "spectral-chart", "summary-led-current", "summary-gain", "summary-integration", "spectral-extrema", "debug-log", "config-detail", "led-label"];
 const el = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 const assembler = new SampleAssembler();
 const ui = createInstrumentUI(el);
@@ -685,7 +1028,10 @@ let missed = 0;
 const supported = !!navigator.bluetooth && window.isSecureContext;
 el.gain.replaceChildren(...GAINS.map((gain, code) => new Option(`${gain}x`, String(code))));
 
+const captures = createCaptureUI({ getChannel:()=>characteristics?.captures, linked:()=>!!device?.gatt?.connected && !!characteristics?.captures, running:()=>!!latestStatus?.acquiring, action });
+
 function controls() {
+  captures.controls(busy);
   const linked = !!characteristics && !!device?.gatt?.connected;
   const ready = linked && latestStatus?.ready && activeConfig?.valid;
   const running = !!latestStatus?.acquiring;
@@ -710,6 +1056,7 @@ function showError(error) {
     INVALID_SAMPLE_PERIOD: "Enter a positive whole-number sample period.",
     SAMPLE_PERIOD_TOO_SHORT: "Sample period is too short for these sensor settings. Increase the period.",
     CONFIG_APPLY_FAILED: "The device could not apply the settings. Read the active configuration before continuing.",
+    CONFIG_SAVE_FAILED: "Settings are applied, but could not be saved for restart. Retry APPLY CONFIGURATION to save them.",
     ACK_TIMEOUT: "The device has not confirmed the change. Read the active configuration before retrying.",
     INITIALIZATION_FAILED: "The sensor is unavailable. Check the device and reconnect.",
   };
@@ -775,6 +1122,7 @@ function onSample(event) {
     }
     lastSequence = sample.sequence;
     ui.sample(sample, !applyingConfig && activeConfig?.valid ? activeConfig.integrationMs : undefined, !applyingConfig && activeConfig?.valid ? activeConfig.adcFullScale : undefined, !applyingConfig && activeConfig?.valid ? activeConfig.ledCurrentMa : undefined);
+    captures.sample(sample);
     ++received;
     el.sample.textContent = [
       `Muestra #${sample.sequence} - ESP32 ${sample.timestampMs} ms - ${sample.channelCount} channels`,
@@ -790,6 +1138,7 @@ function clearConnection() {
     characteristics.sample.removeEventListener("characteristicvaluechanged", onSample);
   }
   characteristics = null;
+  captures.disconnect();
   latestStatus = activeConfig = null;
   assembler.reset();
   lastSequence = null;
@@ -824,7 +1173,7 @@ async function sendCommand(name, { payload, fill = false, allowUnavailable = fal
       if (name === "STOP" || name === "APPLY_CONFIG") assembler.reset();
       if (status.result !== 0) {
         if (allowUnavailable && name === "GET_CONFIG" && !status.ready && status.result === 2) return;
-        const resultNames = ["OK", "UNKNOWN_COMMAND", "SENSOR_ERROR", "COMMAND_QUEUE_FULL", "INVALID_CONFIG", "CONFIG_APPLY_FAILED"];
+        const resultNames = ["OK", "UNKNOWN_COMMAND", "SENSOR_ERROR", "COMMAND_QUEUE_FULL", "INVALID_CONFIG", "CONFIG_APPLY_FAILED", "CONFIG_SAVE_FAILED"];
         throw new Error(`${name}: ${status.error ? ERRORS[status.error] ?? status.error : resultNames[status.result] ?? "COMMAND_FAILED"} (result=${status.result})`);
       }
       return;
@@ -860,7 +1209,13 @@ el.connect.addEventListener("click", () => action(async () => {
     const command = await service.getCharacteristic(UUID.command);
     const sample = await service.getCharacteristic(UUID.sample);
     const config = await service.getCharacteristic(UUID.config);
-    characteristics = { status, command, sample, config };
+    let captureChannel = null;
+    try {
+      captureChannel = await service.getCharacteristic(UUID.captures);
+    } catch (error) {
+      if (error.name !== "NotFoundError") throw error;
+    }
+    characteristics = { status, command, sample, config, captures:captureChannel };
     status.addEventListener("characteristicvaluechanged", onStatus);
     sample.addEventListener("characteristicvaluechanged", onSample);
     await status.startNotifications();
@@ -874,6 +1229,14 @@ el.connect.addEventListener("click", () => action(async () => {
     await sendCommand("GET_CONFIG", { fill: true, allowUnavailable: true });
     if (!device.gatt.connected) throw new Error("Conexion perdida durante la configuracion");
     ui.connection("connected", device.name || "TCS3448");
+    if (captureChannel) {
+      try { await captures.refresh(); } catch (error) { showError(error); }
+    } else {
+      const warning = "Capturas no disponibles: el ESP32 no anuncia CAPTURES (34480006). Carga el firmware del hito 5B y reconecta. Si ya está cargado, elimina el emparejamiento Bluetooth y vuelve a conectar.";
+      el.message.textContent = warning;
+      captures.unavailable(warning);
+      ui.debug(`WARNING ${warning}`);
+    }
   } catch (error) {
     device?.gatt?.disconnect();
     clearConnection();
@@ -891,9 +1254,16 @@ el.apply.addEventListener("click", () => action(async () => {
   ui.configurationState("APPLYING", "warning", "Waiting for device confirmation.");
   try {
     await sendCommand("APPLY_CONFIG", { payload, fill: true });
-    ui.configurationState("CONFIGURATION VALID", "success", "Settings applied to the device.");
+    ui.configurationState("CONFIGURATION VALID", "success", "Settings applied to the device and saved for restart.");
     ui.clearSample();
+    captures.clearSample();
   } catch (error) {
+    if (error.message.includes("CONFIG_SAVE_FAILED")) {
+      ui.clearSample();
+      captures.clearSample();
+      ui.configurationState("APPLIED / NOT SAVED", "warning", "Active settings are confirmed, but persistence failed. Retry APPLY to save for restart.");
+      throw error;
+    }
     if (error.message.includes("ACK_TIMEOUT")) {
       activeConfig = null;
       ui.config(null);

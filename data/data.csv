@@ -1,0 +1,1 @@
+record_id,description,timestamp_ms,gain,integration_ms,led_current_ma,led_mode,auto_smux,autozero,sample_period_ms,adc_full_scale,f1,f2,fz,f3,f4,f5,fy,fxl,f6,f7,f8,nir,vis_tl,vis_br,valid,analog_saturation,digital_saturation,sequence,channel_count,request_id,saturated,vis_tl_1,vis_br_1,vis_tl_2,vis_br_2

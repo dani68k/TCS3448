@@ -27,13 +27,14 @@
       <nav class="main-nav" aria-label="Main navigation">
         <a id="nav-measurement" href="#/measurement" aria-current="page">Measurement</a>
         <a id="nav-setup" href="#/setup" aria-current="false">Setup</a>
+        <a id="nav-data" href="#/data" aria-current="false">Data</a>
         <a id="nav-debug" href="#/debug" aria-current="false">Advanced / Raw Debug</a>
       </nav>
     </aside>
   <main id="main-content" class="instrument-main" tabindex="-1">
     <div id="measurement-view">
       <section class="card measurement-card" aria-label="Spectral RAW counts">
-        <div class="card-heading"><div id="spectral-extrema" class="chart-extrema" aria-label="Current sample maximum and minimum"></div><dl class="measurement-settings" aria-label="Measurement settings"><div><dt>Integration time</dt><dd id="summary-integration">—</dd></div><div><dt>Gain</dt><dd id="summary-gain">—</dd></div><div><dt>Current LED</dt><dd id="summary-led-current">—</dd></div></dl><div class="measurement-actions"><span id="acquisition-state" class="status-badge" data-state="muted" role="status">IDLE</span><button id="start" class="button button-primary" disabled>START</button></div></div>
+        <div class="card-heading"><div id="spectral-extrema" class="chart-extrema" aria-label="Current sample maximum and minimum"></div><dl class="measurement-settings" aria-label="Measurement settings"><div><dt>Integration time</dt><dd id="summary-integration">—</dd></div><div><dt>Gain</dt><dd id="summary-gain">—</dd></div><div><dt>Current LED</dt><dd id="summary-led-current">—</dd></div></dl><div class="measurement-actions"><span id="acquisition-state" class="status-badge" data-state="muted" role="status">IDLE</span><button id="start" class="button button-primary" disabled>START</button><button id="log-capture" class="button button-secondary" disabled>LOG</button></div></div>
         <div id="spectral-chart" class="spectral-chart"></div>
       </section>
       <section class="card vis-card" aria-labelledby="vis-title">
@@ -71,6 +72,21 @@
         </section>
       </div>
     </div>
+    <div id="data-view" hidden>
+      <section class="card data-list-card">
+        <div class="card-heading"><h1>Saved captures</h1><span id="data-count">— / 100</span></div>
+        <p class="hint">Most recent ID first · timestamp = ESP32 uptime</p>
+        <div class="measurement-actions"><button id="data-refresh" class="button button-secondary" disabled>REFRESH</button><button id="data-download" class="button button-secondary" disabled>DOWNLOAD CSV</button><button id="data-delete" class="button button-stop" disabled>DELETE SELECTED</button></div>
+        <p id="data-status" role="status">DISCONNECTED</p><button id="data-cancel" class="button button-secondary">CANCEL TRANSFER</button>
+        <div class="data-table"><table><thead><tr><th>Select</th><th>ID</th><th>Description</th><th>Uptime</th><th>Gain</th><th>Integration</th><th>LED current</th><th>Action</th></tr></thead><tbody id="data-rows"></tbody></table></div>
+      </section>
+      <section class="card saved-record-card"><h2 id="saved-title">Select a saved record</h2><p id="saved-setup" class="hint"></p><div id="saved-extrema" class="chart-extrema"></div><div id="saved-chart" class="spectral-chart"></div><dl id="saved-vis" class="vis-readout"></dl></section>
+    </div>
+    <dialog id="capture-dialog" aria-labelledby="capture-title">
+      <h2 id="capture-title">Guardar captura</h2><p id="capture-status" role="status"></p>
+      <label for="capture-description">Descripción (opcional)<input id="capture-description" type="text" maxlength="80" autocomplete="off"></label>
+      <div class="measurement-actions"><button id="capture-cancel" class="button button-secondary">CANCELAR</button><button id="capture-save" class="button button-primary" disabled>GUARDAR</button></div>
+    </dialog>
     <p id="support" class="support-note"></p>
     <p id="message" class="message" role="alert"></p>
     <section id="debug-view" hidden aria-labelledby="debug-title">

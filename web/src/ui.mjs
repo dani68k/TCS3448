@@ -12,6 +12,43 @@ export function physicalReadings(sample) {
   }));
 }
 
+export function createRawHistogram(host, extrema, visHost) {
+  const node=(tag, className, text)=>{ const e=document.createElement(tag); e.className=className; e.textContent=text; return e; };
+  const dash="\u2014";
+  const chart=createSpectralChart(host,extrema);
+  const visRows = new Map(["VIS TL", "VIS BR"].map(name => {
+    const row = node("div", "vis-row");
+    const value = node("dd", "reading-value", dash);
+    const meter = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    meter.setAttribute("viewBox", "0 0 100 6");
+    meter.setAttribute("class", "vis-meter");
+    meter.setAttribute("preserveAspectRatio", "none");
+    meter.setAttribute("role", "img");
+    const track = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    const fill = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    for (const rect of [track, fill]) { rect.setAttribute("height", 6); rect.setAttribute("rx", 2); }
+    track.setAttribute("width", 100); track.setAttribute("class", "vis-track");
+    fill.setAttribute("width", 0); fill.setAttribute("class", "vis-fill");
+    meter.append(track, fill);
+    row.append(node("dt", "channel-name", name), value);
+    // Keep the visual level outside dd: updating its text must not remove the SVG.
+    row.append(meter);
+    visHost.append(row);
+    return [name, {value, meter, fill}];
+  }));
+  function update(sample, fullScale) {
+    chart.update(sample, fullScale);
+    for (const {name, value} of physicalReadings(sample).filter(c => c.name.startsWith("VIS"))) {
+      const item = visRows.get(name);
+      item.value.textContent = value === null ? dash : `${value} counts`;
+      item.fill.setAttribute("width", fullScale ? Math.min(value ?? 0, fullScale) / fullScale * 100 : 0);
+      item.meter.setAttribute("aria-label", `${name}: ${value === null ? "Not acquired" : `${value} counts`}`);
+    }
+  }
+
+  return {update};
+}
+
 export function createInstrumentUI(el) {
   const node = (tag, className, text) => {
     const element = document.createElement(tag);
@@ -24,7 +61,7 @@ export function createInstrumentUI(el) {
     element.dataset.state = state;
   };
   const dash = "\u2014";
-  const chart = createSpectralChart(el["spectral-chart"], el["spectral-extrema"]);
+  const histogram = createRawHistogram(el["spectral-chart"], el["spectral-extrema"], el["sample-readout"]);
   const logs = [];
   let lastStatusKey = "";
   let lastSample = null;
@@ -36,7 +73,7 @@ export function createInstrumentUI(el) {
     if (logs.length > 40) logs.shift();
     el["debug-log"].textContent = logs.join("\n");
   };
-  const views = { measurement: "Measurement", setup: "Sensor Setup", debug: "Advanced / Raw Debug" };
+  const views = { measurement: "Measurement", setup: "Sensor Setup", data: "Saved captures", debug: "Advanced / Raw Debug" };
   function showView(view, updateHash = false) {
     const active = Object.hasOwn(views, view) ? view : "measurement";
     for (const key of Object.keys(views)) {
@@ -56,36 +93,7 @@ export function createInstrumentUI(el) {
   });
   showView(window.location.hash.slice(2));
 
-  const visRows = new Map(["VIS TL", "VIS BR"].map(name => {
-    const row = node("div", "vis-row");
-    const value = node("dd", "reading-value", dash);
-    const meter = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    meter.setAttribute("viewBox", "0 0 100 6");
-    meter.setAttribute("class", "vis-meter");
-    meter.setAttribute("preserveAspectRatio", "none");
-    meter.setAttribute("role", "img");
-    const track = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    const fill = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    for (const rect of [track, fill]) { rect.setAttribute("height", 6); rect.setAttribute("rx", 2); }
-    track.setAttribute("width", 100); track.setAttribute("class", "vis-track");
-    fill.setAttribute("width", 0); fill.setAttribute("class", "vis-fill");
-    meter.append(track, fill);
-    row.append(node("dt", "channel-name", name), value);
-    // Keep the visual level outside dd: updating its text must not remove the SVG.
-    row.append(meter);
-    el["sample-readout"].append(row);
-    return [name, {value, meter, fill}];
-  }));
-  function readings(sample) {
-    chart.update(sample, sampleFullScale ?? confirmedFullScale);
-    for (const {name, value} of physicalReadings(sample).filter(c => c.name.startsWith("VIS"))) {
-      const item = visRows.get(name);
-      item.value.textContent = value === null ? dash : `${value} counts`;
-      const fullScale = sampleFullScale ?? confirmedFullScale;
-      item.fill.setAttribute("width", fullScale ? Math.min(value ?? 0, fullScale) / fullScale * 100 : 0);
-      item.meter.setAttribute("aria-label", `${name}: ${value === null ? "Not acquired" : `${value} counts`}`);
-    }
-  }
+  const readings = sample => histogram.update(sample, sampleFullScale ?? confirmedFullScale);
 
   function measurementSettings(integrationMs, gain, ledCurrentMa) {
     el["summary-integration"].textContent = Number.isFinite(integrationMs) ? `${integrationMs.toFixed(3)} ms` : dash;

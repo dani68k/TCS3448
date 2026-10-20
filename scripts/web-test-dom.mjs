@@ -17,6 +17,8 @@ class TestElement {
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   replaceChildren(...children) { this._text = ""; this.children = children; }
   append(...children) { this.children.push(...children); }
+  showModal() { this.open = true; }
+  close() { this.open = false; }
   async click() { if (!this.disabled) await this.handlers.get("click")?.(new Event("click", { cancelable: true })); }
 }
 export function createTestDOM(html, hash = "") {

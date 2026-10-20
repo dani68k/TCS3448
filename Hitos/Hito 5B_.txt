@@ -1,0 +1,1824 @@
+Proyecto:
+Aplicación de caracterización y adquisición de datos para el sensor TCS3448 sobre ESP32.
+
+Entorno:
+- ESP32
+- PlatformIO
+- Arduino framework
+- VSCode
+- TCS3448
+- Adafruit_TCS3448
+- Web Bluetooth / BLE
+- Interfaz web autocontenida
+- Dark mode
+- SPA con menú lateral
+- TCS3448Manager implementado
+- adquisición BLE funcionando
+- Hito 5A implementado y funcional
+
+IMPORTANTE:
+NO debe aparecer ninguna referencia a "ATLANTES" en:
+- código
+- comentarios
+- documentación
+- interfaz web
+- nombres de clases
+- namespaces
+- mensajes BLE
+- nombres de archivos
+- nombres de módulos
+
+==================================================
+ESTADO ACTUAL DE LA APLICACIÓN
+==================================================
+
+La interfaz actual ya dispone de:
+
+Menú lateral:
+- Measurement
+- Setup
+- Advanced / Raw Debug
+
+El menú y la cabecera permanecen visibles durante scroll.
+
+Header:
+- CONNECT / DISCONNECT unificado
+- estado BLE
+
+Measurement:
+- histograma RAW de los 12 canales espectrales:
+  F1
+  F2
+  FZ
+  F3
+  F4
+  F5
+  FY
+  FXL
+  F6
+  F7
+  F8
+  NIR
+
+- eje Y fijo basado en ADC Full Scale
+- Integration Time
+- Gain
+- Current LED
+- START / STOP integrado en la zona de medida
+- MAX y MIN de cada muestra
+- SAT amarillo desde 90 % ADC FS
+- SAT rojo desde 95 % ADC FS
+- VIS excluido de esta lógica SAT
+
+VIS:
+- VIS TL
+- VIS BR
+- barras horizontales independientes
+
+Setup:
+- configuración del sensor
+- LED Mode:
+  OFF
+  ON
+  AUTO
+
+LED AUTO:
+- LED se enciende durante adquisición
+- LED se apaga con STOP
+- LED se apaga con desconexión
+- LED se apaga ante fallo
+- lógica gestionada por ESP32
+
+Advanced / Raw Debug:
+- datos técnicos
+- muestras RAW completas
+- información de diagnóstico
+
+La documentación ya existe y debe mantenerse actualizada.
+
+==================================================
+HITO 5B — DATA LOGGING / CSV / FLASH
+==================================================
+
+OBJETIVO GENERAL
+
+Convertir la aplicación actual en una herramienta de adquisición experimental capaz de:
+
+1. adquirir muestras normalmente
+2. iniciar una sesión de registro
+3. guardar muestras en la Flash interna del ESP32
+4. almacenarlas en formato CSV
+5. detener el registro de forma segura
+6. visualizar archivos almacenados
+7. consultar uso de Flash
+8. descargar archivos CSV al navegador mediante BLE
+9. eliminar archivos
+
+NO implementar todavía:
+
+- calibración
+- DARK
+- REFERENCE
+- SAMPLE químico
+- transmitancia
+- absorbancia
+- normalización colorimétrica
+- curvas de calibración
+- análisis químico
+- base de datos
+- SD card
+- WiFi
+- HTTP server
+- cloud storage
+
+Este hito se centra exclusivamente en:
+
+DATA ACQUISITION + LOCAL STORAGE + CSV + BLE FILE TRANSFER
+
+==================================================
+PRINCIPIO FUNDAMENTAL
+==================================================
+
+Separar claramente:
+
+ACQUISITION
+y
+RECORDING
+
+No son lo mismo.
+
+Acquisition:
+START / STOP actual del sensor.
+
+Recording:
+START RECORDING / STOP RECORDING.
+
+Estados válidos:
+
+Acquisition RUNNING
+Recording OFF
+
+→ sensor funcionando y mostrando histograma
+→ no se guarda nada
+
+Acquisition RUNNING
+Recording ON
+
+→ sensor funcionando
+→ cada TCS3448Sample se guarda
+
+Acquisition STOPPED
+Recording OFF
+
+→ estado normal detenido
+
+No permitir:
+
+Acquisition STOPPED
+Recording ON
+
+Si se intenta iniciar Recording sin adquisición activa:
+devolver error.
+
+Ejemplo:
+
+ACQUISITION_NOT_RUNNING
+
+==================================================
+1. ARQUITECTURA DE DATOS
+==================================================
+
+Muy importante:
+
+NO realizar una segunda lectura del sensor para logging.
+
+La misma TCS3448Sample debe alimentar:
+
+TCS3448
+   |
+   v
+TCS3448Sample
+   |
+   +----> Measurement histogram
+   |
+   +----> Advanced Debug
+   |
+   +----> BLE notifications
+   |
+   +----> DataLogger
+             |
+             v
+           CSV
+
+Una adquisición física = una única TCS3448Sample.
+
+El DataLogger debe consumir la muestra ya adquirida.
+
+==================================================
+2. NUEVO MÓDULO DATALOGGER
+==================================================
+
+Crear un módulo específico.
+
+Seguir la estructura real existente del proyecto.
+
+Conceptualmente:
+
+DataLogger/
+    DataLogger.cpp
+    DataLogger.h
+    DataLoggerTypes.h     (solo si aporta valor)
+    README.md
+
+No introducir toda la lógica de filesystem en main.cpp.
+
+No introducir toda la lógica de filesystem en BLEWebManager.
+
+Responsabilidad de DataLogger:
+
+- inicializar almacenamiento
+- iniciar sesión
+- crear archivo CSV
+- escribir cabecera
+- escribir muestras
+- realizar flush controlado
+- detener sesión
+- cerrar archivo
+- listar archivos
+- obtener tamaño
+- eliminar archivos
+- obtener información de almacenamiento
+- proporcionar acceso de lectura para transferencia BLE
+- manejar errores
+
+==================================================
+3. FILESYSTEM
+==================================================
+
+Preferencia:
+
+LittleFS
+
+Antes de implementar:
+- comprobar plataforma ESP32 concreta
+- comprobar particionado actual
+- comprobar si LittleFS ya está configurado
+- comprobar espacio disponible
+- comprobar dependencias existentes
+
+No asumir que LittleFS está disponible sin revisar el proyecto.
+
+Si existe ya otro filesystem adecuado:
+evaluarlo antes de sustituirlo.
+
+NO usar SD.
+
+==================================================
+4. INICIALIZACIÓN DE STORAGE
+==================================================
+
+Durante startup:
+
+DataLogger.begin()
+
+Debe:
+
+- montar LittleFS
+- comprobar capacidad
+- comprobar espacio usado/libre
+- reportar error si falla
+
+NO formatear automáticamente la Flash ante cualquier error.
+
+Evitar:
+
+LittleFS.begin(true)
+
+sin analizar consecuencias.
+
+Si el montaje falla:
+- informar
+- mantener el sensor operativo
+- desactivar únicamente la función Data Logging
+
+No destruir datos automáticamente.
+
+==================================================
+5. NUEVA VISTA "DATA"
+==================================================
+
+Añadir al menú lateral:
+
+Measurement
+Setup
+Data
+Advanced / Raw Debug
+
+Data debe ser otra vista de la SPA.
+
+NO provocar reload.
+
+NO romper la conexión BLE.
+
+Mantener:
+- header
+- menú lateral
+- dark mode
+- estilo instrumental device
+
+==================================================
+6. DISEÑO GENERAL DE DATA
+==================================================
+
+La vista Data debe tener tres bloques principales:
+
+1. RECORDING
+2. CURRENT SESSION
+3. STORED FILES / STORAGE
+
+Diseño conceptual:
+
+DATA LOGGING
+
+--------------------------------
+RECORDING
+
+Session name
+[ test_001              ]
+
+Storage
+Internal Flash
+
+Acquisition
+● RUNNING
+
+Recording
+● IDLE
+
+[ START RECORDING ]
+
+--------------------------------
+CURRENT SESSION
+
+File
+test_001.csv
+
+Samples
+0
+
+Elapsed Time
+00:00:00
+
+File Size
+0 kB
+
+[ STOP RECORDING ]
+
+--------------------------------
+STORAGE
+
+Used
+xxx kB
+
+Free
+xxxx kB
+
+Usage
+xx %
+
+--------------------------------
+FILES
+
+Name              Samples      Size
+
+test_001.csv       324         42 kB
+test_002.csv       875        114 kB
+
+[ DOWNLOAD ]
+[ DELETE ]
+
+==================================================
+7. SESSION NAME
+==================================================
+
+Permitir introducir:
+
+Session name
+
+Ejemplo:
+
+test_green_01
+
+El firmware debe validar el nombre.
+
+Permitir preferentemente:
+
+a-z
+A-Z
+0-9
+_
+-
+
+No permitir:
+/
+\
+..
+caracteres de path
+control characters
+
+La web puede validar para UX.
+
+El firmware debe validar definitivamente.
+
+==================================================
+8. NOMBRES DE ARCHIVO ÚNICOS
+==================================================
+
+No sobrescribir silenciosamente archivos existentes.
+
+Si:
+
+test_001.csv
+
+ya existe:
+
+crear automáticamente:
+
+test_001_001.csv
+
+test_001_002.csv
+
+etc.
+
+o implementar una estrategia equivalente clara.
+
+No borrar ni reemplazar datos automáticamente.
+
+==================================================
+9. CSV — PRINCIPIO
+==================================================
+
+El CSV debe ser autosuficiente y útil fuera de la aplicación.
+
+Cada fila debe contener:
+
+- número de muestra
+- timestamp
+- configuración real
+- canales espectrales
+- VIS
+- flags de estado
+
+Aunque la configuración permanezca constante,
+repetirla en cada fila.
+
+Motivo:
+cada registro individual mantiene trazabilidad.
+
+==================================================
+10. FORMATO CSV PROPUESTO
+==================================================
+
+Cabecera de columnas:
+
+sample_number,
+timestamp_ms,
+gain,
+integration_ms,
+led_current_ma,
+led_mode,
+adc_full_scale,
+f1,
+f2,
+fz,
+f3,
+f4,
+f5,
+fy,
+fxl,
+f6,
+f7,
+f8,
+nir,
+vis_tl,
+vis_br,
+valid,
+analog_saturation,
+digital_saturation
+
+Adaptar nombres a las estructuras reales existentes.
+
+No inventar datos que TCS3448Sample no contiene.
+
+Si actualmente ciertos flags no existen:
+- revisar TCS3448Sample
+- añadirlos solo si la información ya está disponible
+- no inventar estados falsos
+
+==================================================
+11. METADATOS DEL CSV
+==================================================
+
+Antes de la cabecera CSV añadir comentarios opcionales:
+
+# Sensor: TCS3448
+# Firmware: <version si existe>
+# Session: test_001
+# Created uptime_ms: ...
+# Gain: ...
+# Integration time: ...
+# LED current: ...
+# LED mode: ...
+# ADC full scale: ...
+# Auto SMUX: ...
+# Sample period: ...
+
+Después:
+
+sample_number,timestamp_ms,...
+
+Las líneas de metadatos deben empezar por:
+
+#
+
+De esta forma herramientas como pandas pueden leer:
+
+read_csv(..., comment="#")
+
+No incluir información inventada.
+
+==================================================
+12. TIMESTAMP
+==================================================
+
+En este hito no existe necesariamente RTC.
+
+Usar como mínimo:
+
+timestamp_ms
+
+basado en millis() o timestamp interno actual.
+
+Documentar claramente:
+
+timestamp_ms = tiempo desde boot
+
+NO presentarlo como fecha/hora real.
+
+Si ya existe una fuente temporal absoluta:
+reutilizarla.
+
+No añadir NTP ni RTC en este hito.
+
+==================================================
+13. START RECORDING
+==================================================
+
+Flujo:
+
+1. usuario pulsa START RECORDING
+2. web envía comando
+3. ESP32 valida:
+   - filesystem disponible
+   - acquisition RUNNING
+   - no hay recording activo
+   - session name válido
+   - existe espacio suficiente
+4. crea nombre único
+5. abre CSV
+6. escribe metadata
+7. escribe header
+8. entra en estado RECORDING
+9. devuelve ACK
+10. web actualiza estado
+
+No mostrar Recording ON antes del ACK.
+
+==================================================
+14. WRITE SAMPLE
+==================================================
+
+Cuando llega cada nueva TCS3448Sample:
+
+si:
+
+DataLogger.isRecording() == true
+
+entonces:
+
+DataLogger.writeSample(sample)
+
+No bloquear innecesariamente la adquisición.
+
+Evitar:
+- String gigantes
+- malloc/free repetidos
+- streams dinámicos pesados
+
+Preferir:
+- buffer estático/local limitado
+- snprintf
+- escritura secuencial
+
+==================================================
+15. SAMPLE NUMBER
+==================================================
+
+El CSV debe tener un contador propio de sesión:
+
+1
+2
+3
+4
+...
+
+No depender necesariamente del contador global de Measurement.
+
+Reiniciar a 1 al comenzar cada recording.
+
+==================================================
+16. FLUSH
+==================================================
+
+No hacer:
+
+open
+write
+close
+
+en cada muestra.
+
+Mantener archivo abierto durante la sesión.
+
+Implementar flush periódico.
+
+Ejemplo:
+- cada 10 muestras
+o
+- cada 5 segundos
+
+Elegir una estrategia razonable según el código actual.
+
+Documentarla.
+
+Objetivos:
+
+- reducir desgaste
+- reducir overhead
+- limitar pérdida de datos ante reset
+
+STOP RECORDING:
+siempre hacer flush + close.
+
+==================================================
+17. STOP RECORDING
+==================================================
+
+Flujo:
+
+1. usuario pulsa STOP RECORDING
+2. DataLogger deja de aceptar muestras
+3. flush
+4. close
+5. actualiza metadata si aplica
+6. devuelve resumen
+7. web actualiza lista de archivos
+
+Respuesta conceptual:
+
+{
+  "type": "recording_stopped",
+  "ok": true,
+  "file": "test_001.csv",
+  "samples": 324,
+  "size": 42850
+}
+
+==================================================
+18. STOP ACQUISITION DURANTE RECORDING
+==================================================
+
+Si usuario pulsa STOP Measurement mientras Recording está activo:
+
+primero:
+
+STOP RECORDING de forma segura
+
+después:
+
+STOP acquisition
+
+No dejar Recording activo sin adquisición.
+
+La web debe reflejarlo.
+
+==================================================
+19. DESCONEXIÓN BLE DURANTE RECORDING
+==================================================
+
+Decisión importante:
+
+NO detener Recording automáticamente por una desconexión BLE.
+
+El ESP32 debe continuar registrando de forma autónoma.
+
+Motivo:
+la función DataLogger debe poder operar independientemente del navegador.
+
+Si el navegador reconecta:
+
+GET_STATUS
+
+debe devolver:
+
+Acquisition: RUNNING
+Recording: RUNNING
+Current file: ...
+Samples: ...
+
+La web debe recuperar el estado real.
+
+IMPORTANTE:
+No aplicar a Recording la misma lógica del LED AUTO que actualmente pueda detener adquisición al desconectar sin revisar arquitectura.
+
+Analizar cuidadosamente comportamiento actual de disconnect.
+
+Si actualmente la desconexión BLE detiene Measurement:
+documentarlo y decidir cómo reconciliarlo con el requisito de recording autónomo.
+
+Prioridad:
+NO introducir un comportamiento inconsistente.
+
+Si la arquitectura actual hace imposible mantener adquisición sin BLE,
+explicarlo antes de modificar la lógica.
+
+==================================================
+20. RESET / POWER LOSS
+==================================================
+
+El archivo debe ser tolerante a un reset inesperado.
+
+No es necesario implementar journaling complejo.
+
+Pero:
+
+- cada línea debe escribirse completa
+- flush periódico
+- archivos existentes deben permanecer
+- startup no debe borrarlos
+
+Un CSV parcialmente terminado debe seguir siendo recuperable.
+
+==================================================
+21. STORAGE FULL
+==================================================
+
+Antes de iniciar:
+comprobar espacio.
+
+Durante recording:
+comprobar errores de escritura.
+
+Si se llena:
+
+1. detener recording
+2. flush/close si es posible
+3. marcar error
+
+STORAGE_FULL
+
+4. mantener sensor funcionando
+5. avisar web cuando vuelva a existir conexión
+
+==================================================
+22. STORAGE INFO
+==================================================
+
+Exponer:
+
+total_bytes
+used_bytes
+free_bytes
+
+La web muestra:
+
+Storage
+
+Used      284 kB
+Free      1.63 MB
+Usage      15 %
+
+No actualizar constantemente.
+
+Actualizar:
+- al entrar en Data
+- START
+- STOP
+- DELETE
+- reconnect
+- manual refresh si se implementa
+
+==================================================
+23. CURRENT SESSION
+==================================================
+
+Durante Recording mostrar:
+
+File
+Samples
+Elapsed Time
+File Size
+
+Ejemplo:
+
+Current Session
+
+File
+green_test_01.csv
+
+Samples
+324
+
+Elapsed
+00:02:42
+
+Size
+42.8 kB
+
+Actualizar de forma razonable.
+
+No es necesario actualizar el tamaño en cada sample si genera tráfico BLE excesivo.
+
+Por ejemplo:
+cada 1-2 segundos.
+
+==================================================
+24. LISTADO DE ARCHIVOS
+==================================================
+
+Implementar:
+
+LIST_FILES
+
+Respuesta conceptual:
+
+{
+  "type": "file_list",
+  "files": [
+    {
+      "name": "test_001.csv",
+      "size": 42850,
+      "samples": 324
+    }
+  ]
+}
+
+Si obtener samples requiere recorrer todo el CSV y penaliza mucho:
+
+NO hacer un scan completo cada vez.
+
+Preferencias, en orden:
+
+1. mantener metadata pequeña asociada al archivo
+2. mantener información de sesión persistente
+3. si no existe otra opción, omitir samples de archivos antiguos
+
+No sacrificar rendimiento únicamente para mostrar sample count.
+
+==================================================
+25. METADATA PERSISTENTE
+==================================================
+
+Evaluar si conviene crear un pequeño archivo metadata asociado.
+
+Ejemplo:
+
+test_001.csv
+test_001.meta
+
+o:
+
+test_001.json
+
+Que contenga:
+
+- samples
+- creation uptime
+- configuration
+- final size
+- completed true/false
+
+No es obligatorio.
+
+Implementarlo solo si simplifica de forma clara:
+- file listing
+- recovery
+- sample count
+
+Evitar sobrearquitectura.
+
+==================================================
+26. DELETE FILE
+==================================================
+
+Permitir eliminar un CSV.
+
+Requisitos:
+
+- no permitir borrar archivo actualmente abierto
+- pedir confirmación en web
+
+Ejemplo:
+
+Delete test_001.csv?
+
+[ CANCEL ]
+[ DELETE ]
+
+Firmware:
+validar nombre de archivo.
+
+No aceptar paths arbitrarios.
+
+==================================================
+27. DOWNLOAD FILE — PRINCIPIO
+==================================================
+
+La descarga debe realizarse mediante BLE.
+
+NO intentar enviar un archivo entero en un único mensaje.
+
+Implementar transferencia por chunks.
+
+Arquitectura:
+
+Browser
+   |
+   | GET_FILE
+   v
+ESP32
+   |
+   +--> FILE_BEGIN
+   +--> FILE_CHUNK 0
+   +--> FILE_CHUNK 1
+   +--> ...
+   +--> FILE_END
+
+Browser:
+- reconstruye bytes
+- crea Blob
+- descarga CSV
+
+==================================================
+28. TRANSFERENCIA BLE POR CHUNKS
+==================================================
+
+Diseñar una transferencia robusta.
+
+Debe incluir como mínimo:
+
+FILE_BEGIN:
+- filename
+- total size
+- transfer ID si aporta valor
+
+FILE_CHUNK:
+- sequence number
+- payload
+
+FILE_END:
+- total bytes
+- success
+
+FILE_ERROR:
+- error code
+
+No codificar grandes cantidades de binario como JSON si penaliza demasiado.
+
+Analizar protocolo BLE actual.
+
+Preferencia:
+- metadata/control JSON
+- chunks binarios
+
+pero no reescribir todo el protocolo si no es necesario.
+
+==================================================
+29. MTU
+==================================================
+
+No asumir un MTU concreto.
+
+Comprobar cómo funciona actualmente BLE.
+
+Usar chunks suficientemente conservadores.
+
+La implementación debe evitar:
+- payload demasiado grande
+- truncamiento
+- corrupción silenciosa
+
+Documentar tamaño de chunk utilizado.
+
+==================================================
+30. FLOW CONTROL
+==================================================
+
+No enviar todos los chunks sin control.
+
+Implementar mecanismo simple de flow control.
+
+Opciones:
+
+A)
+browser solicita NEXT_CHUNK
+
+o
+
+B)
+ACK por bloques
+
+Preferencia inicial:
+modelo pull simple.
+
+Ejemplo:
+
+GET_FILE
+FILE_BEGIN
+
+GET_NEXT
+CHUNK 0
+
+GET_NEXT
+CHUNK 1
+
+...
+
+Esto puede ser más lento,
+pero mucho más robusto para primera implementación.
+
+Optimización posterior si fuera necesaria.
+
+==================================================
+31. DOWNLOAD PROGRESS
+==================================================
+
+En la web mostrar:
+
+Downloading
+test_001.csv
+
+[██████████░░░░░] 68 %
+
+42.4 / 62.1 kB
+
+[ CANCEL ]
+
+Al completar:
+
+crear Blob:
+
+text/csv
+
+y permitir guardar archivo localmente.
+
+==================================================
+32. CANCEL DOWNLOAD
+==================================================
+
+Permitir cancelar transferencia.
+
+El ESP32 debe:
+- cerrar archivo de lectura
+- liberar estado de transferencia
+- seguir funcionando normalmente
+
+==================================================
+33. RECORDING Y DOWNLOAD SIMULTÁNEOS
+==================================================
+
+Para esta primera versión:
+
+NO permitir descargar un archivo mientras Recording está activo.
+
+Motivo:
+simplificar acceso concurrente a Flash.
+
+Devolver:
+
+RECORDING_ACTIVE
+
+Del mismo modo:
+NO borrar archivos durante Recording.
+
+Podemos relajar esta restricción en el futuro.
+
+==================================================
+34. FILE LIST UI
+==================================================
+
+Diseño instrumental.
+
+Ejemplo:
+
+STORED FILES
+
+Name                 Samples        Size
+------------------------------------------------
+test_001.csv           324          42.8 kB
+green_02.csv           875         114.2 kB
+
+[ DOWNLOAD ] [ DELETE ]
+
+No usar un file explorer complejo.
+
+==================================================
+35. ESTADO RECORDING GLOBAL
+==================================================
+
+Cuando esté grabando:
+
+mostrar siempre una indicación clara:
+
+● RECORDING
+
+Preferentemente:
+- header
+o
+- menú lateral
+
+Color recomendado:
+rojo moderado o ámbar
+
+No usar el mismo verde de CONNECTED.
+
+Debe ser difícil olvidar que el dispositivo está registrando datos.
+
+==================================================
+36. PROTOCOLO BLE
+==================================================
+
+Antes de añadir comandos:
+
+analizar protocolo actual.
+
+Reutilizar:
+- characteristic existente
+- JSON existente
+- ACK existente
+- sistema de notifications existente
+
+No crear servicios BLE duplicados si no hacen falta.
+
+Nuevos comandos conceptuales:
+
+START_RECORDING
+STOP_RECORDING
+GET_RECORDING_STATUS
+GET_STORAGE_INFO
+LIST_FILES
+DELETE_FILE
+GET_FILE
+GET_NEXT_CHUNK
+CANCEL_FILE_TRANSFER
+
+Adaptar nombres al protocolo real.
+
+==================================================
+37. ACK / ERRORS
+==================================================
+
+Todos los comandos deben responder.
+
+Errores conceptuales:
+
+STORAGE_NOT_AVAILABLE
+STORAGE_FULL
+INVALID_SESSION_NAME
+ACQUISITION_NOT_RUNNING
+ALREADY_RECORDING
+NOT_RECORDING
+FILE_EXISTS
+FILE_NOT_FOUND
+FILE_OPEN_FAILED
+FILE_WRITE_FAILED
+FILE_READ_FAILED
+INVALID_FILENAME
+RECORDING_ACTIVE
+TRANSFER_ACTIVE
+TRANSFER_NOT_ACTIVE
+INVALID_SEQUENCE
+DELETE_FAILED
+
+No hace falta usar exactamente estas strings,
+pero mantener códigos consistentes.
+
+==================================================
+38. ESTADO GENERAL
+==================================================
+
+GET_STATUS debería poder incluir:
+
+connected
+acquisition_running
+recording
+recording_file
+recording_samples
+storage_available
+
+Si la arquitectura actual separa estados:
+adaptarlo.
+
+Firmware = fuente de verdad.
+
+==================================================
+39. WEB — NO DUPLICAR ESTADO
+==================================================
+
+La web no debe asumir:
+
+"he pulsado Start Recording, por tanto está grabando".
+
+Debe esperar ACK.
+
+Igual para STOP.
+
+Después de reconnect:
+
+solicitar estado real.
+
+==================================================
+40. MAIN.CPP
+==================================================
+
+Mantener main.cpp como coordinador.
+
+Conceptualmente:
+
+sample = sensorManager.readSample()
+
+updateMeasurement(sample)
+
+if (dataLogger.isRecording())
+    dataLogger.writeSample(sample)
+
+No meter:
+- filesystem completo
+- CSV formatting extenso
+- file transfer BLE
+
+directamente en main.cpp.
+
+==================================================
+41. NO BLOQUEAR ADQUISICIÓN
+==================================================
+
+Revisar tiempos.
+
+DataLogger no debe introducir pausas largas que afecten:
+
+- adquisición
+- BLE
+- LED AUTO
+- histograma
+
+Medir o al menos instrumentar temporalmente duración de:
+- writeSample
+- flush
+
+Logs de debug pueden ayudar.
+
+==================================================
+42. FLASH WEAR
+==================================================
+
+Documentar que LittleFS utiliza wear leveling.
+
+Aun así:
+
+- no crear/borrar archivos innecesariamente
+- no flush por cada byte
+- no reescribir metadata completa por cada sample
+
+Mantener diseño razonable para Flash.
+
+==================================================
+43. VALIDACIÓN CSV
+==================================================
+
+Después de registrar una sesión de prueba:
+
+descargar o inspeccionar el CSV.
+
+Verificar:
+
+- número de columnas constante
+- ninguna línea truncada
+- sample_number creciente
+- timestamps crecientes
+- canales correctos
+- configuración correcta
+- VIS correcto
+- flags correctos
+
+==================================================
+44. VALIDACIÓN DE MUESTRA
+==================================================
+
+Comparar una muestra del CSV con la misma muestra mostrada en Debug.
+
+Debe coincidir:
+
+F1
+F2
+FZ
+F3
+F4
+F5
+FY
+FXL
+F6
+F7
+F8
+NIR
+VIS TL
+VIS BR
+
+No puede existir una segunda adquisición independiente.
+
+==================================================
+45. ADVANCED / RAW DEBUG
+==================================================
+
+Añadir información útil:
+
+Storage:
+MOUNTED / ERROR
+
+Recording:
+ON / OFF
+
+Current file:
+...
+
+Samples:
+...
+
+Last write:
+OK / ERROR
+
+Transfer:
+IDLE / ACTIVE
+
+No saturar la interfaz principal con estos datos.
+
+==================================================
+46. DOCUMENTACIÓN GLOBAL
+==================================================
+
+Actualizar:
+
+ARCHITECTURE.md
+
+Añadir:
+
+- arquitectura DataLogger
+- flujo de TCS3448Sample
+- diferencia acquisition vs recording
+- LittleFS
+- formato CSV
+- session handling
+- file list
+- BLE file transfer
+- disconnect behavior
+- error handling
+
+Diagrama:
+
+TCS3448
+   |
+   v
+TCS3448Manager
+   |
+   v
+TCS3448Sample
+   |
+   +--> Measurement UI
+   |
+   +--> Debug
+   |
+   +--> DataLogger
+             |
+             v
+          LittleFS
+             |
+             v
+          CSV files
+             |
+             v
+      BLE File Transfer
+             |
+             v
+          Browser
+
+==================================================
+47. DATALOGGER README
+==================================================
+
+Crear:
+
+DataLogger/README.md
+
+Debe explicar:
+
+- responsabilidad
+- API pública
+- LittleFS
+- session lifecycle
+- CSV
+- flush
+- filenames
+- error handling
+- storage info
+- file access
+- comportamiento ante reset
+- comportamiento ante Flash llena
+
+==================================================
+48. BLE README
+==================================================
+
+Actualizar README del módulo BLE.
+
+Añadir:
+
+- comandos de logging
+- file list
+- file transfer
+- chunks
+- flow control
+- errors
+- reconnect
+
+==================================================
+49. WEB README
+==================================================
+
+Actualizar README de la parte web.
+
+Añadir:
+
+- nueva vista Data
+- recording controls
+- current session
+- storage
+- files
+- download
+- delete
+- progress
+- recording indicator
+
+==================================================
+50. DOCUMENTACIÓN COMO PARTE DEL CAMBIO
+==================================================
+
+No dejar documentación para después.
+
+Cada cambio de API/protocolo debe reflejarse en:
+- código
+- README módulo
+- ARCHITECTURE.md
+
+No crear documentos redundantes.
+
+==================================================
+51. IMPLEMENTACIÓN POR FASES
+==================================================
+
+Implementar el Hito 5B en este orden.
+
+-------------------------
+FASE 5B.1
+LOCAL DATA LOGGER
+-------------------------
+
+Implementar primero:
+
+- LittleFS
+- DataLogger
+- START_RECORDING
+- STOP_RECORDING
+- CSV
+- writeSample
+- flush
+- storage info
+- error handling
+
+Verificar en hardware/simulación disponible.
+
+NO implementar todavía descarga hasta que esto funcione.
+
+-------------------------
+FASE 5B.2
+DATA VIEW
+-------------------------
+
+Después:
+
+- menú Data
+- recording UI
+- current session
+- storage usage
+- file list
+- delete
+- reconnect state
+
+-------------------------
+FASE 5B.3
+FILE DOWNLOAD
+-------------------------
+
+Finalmente:
+
+- GET_FILE
+- chunk transfer
+- flow control
+- progress
+- cancel
+- Blob
+- download CSV
+
+No mezclar las tres fases sin validar cada una.
+
+==================================================
+52. CRITERIOS DE CIERRE 5B.1
+==================================================
+
+5B.1 terminado cuando:
+
+1. LittleFS monta correctamente
+2. Acquisition funciona como antes
+3. START_RECORDING crea CSV
+4. cada muestra genera una fila
+5. no hay segunda lectura del sensor
+6. STOP_RECORDING hace flush/close
+7. archivo persiste tras reset
+8. CSV es válido
+9. storage info funciona
+10. Flash llena produce error seguro
+11. firmware compila
+12. documentación actualizada
+
+==================================================
+53. CRITERIOS DE CIERRE 5B.2
+==================================================
+
+5B.2 terminado cuando:
+
+1. aparece Data en menú
+2. SPA no recarga
+3. BLE no se pierde al navegar
+4. session name funciona
+5. START RECORDING funciona
+6. STOP RECORDING funciona
+7. current session se actualiza
+8. storage usage se muestra
+9. files se listan
+10. delete funciona
+11. reconnect recupera estado
+12. indicador RECORDING global funciona
+
+==================================================
+54. CRITERIOS DE CIERRE 5B.3
+==================================================
+
+5B.3 terminado cuando:
+
+1. se selecciona un CSV
+2. DOWNLOAD inicia transferencia
+3. ESP32 lee por chunks
+4. browser reconstruye archivo
+5. progreso visible
+6. contenido descargado coincide byte a byte
+7. cancel funciona
+8. archivo inexistente da error
+9. no se bloquea adquisición normal
+10. no se descarga durante Recording
+11. reconexión deja el sistema en estado consistente
+
+==================================================
+55. TEST DE INTEGRIDAD DE ARCHIVO
+==================================================
+
+Después de descargar un archivo:
+
+comparar:
+
+size Flash
+vs
+size browser
+
+Deben coincidir.
+
+Si es viable:
+usar CRC32 durante transferencia.
+
+Opcional pero recomendable.
+
+Si se implementa:
+
+FILE_END:
+- total bytes
+- CRC32
+
+Browser:
+- verifica CRC
+
+No implementar criptografía.
+
+==================================================
+56. NO IMPLEMENTAR CALIBRACIÓN
+==================================================
+
+Muy importante:
+
+No introducir todavía:
+
+DARK
+REFERENCE
+TRANSMITTANCE
+ABSORBANCE
+CALIBRATION
+CONCENTRATION
+NORMALIZED SPECTRUM
+
+El CSV contiene datos de adquisición RAW y metadata.
+
+==================================================
+57. NO MODIFICAR HITO 5A
+==================================================
+
+Mantener intacto salvo integración necesaria:
+
+- histograma
+- ADC Full Scale
+- MAX/MIN
+- SAT
+- VIS bars
+- START/STOP
+- LED AUTO
+- menú sticky
+- header sticky
+
+No rediseñar Measurement.
+
+==================================================
+58. VALIDACIÓN REAL
+==================================================
+
+Distinguir claramente:
+
+TEST AUTOMATIZADO
+TEST DE COMPILACIÓN
+TEST EN HARDWARE REAL
+
+No afirmar validación hardware si no se ha realizado.
+
+Al finalizar indicar:
+
+- qué se verificó automáticamente
+- qué compiló
+- qué requiere prueba física
+
+==================================================
+59. PROCEDIMIENTO DE TRABAJO PARA CODEX
+==================================================
+
+PASO 1
+Analizar todo el proyecto actual.
+
+PASO 2
+Identificar:
+- arquitectura
+- módulos
+- protocolo BLE
+- TCS3448Sample
+- adquisición
+- estado global
+- filesystem/particiones
+- web autocontenida
+- documentación existente
+
+PASO 3
+Explicar brevemente el plan y archivos afectados.
+
+PASO 4
+Implementar FASE 5B.1.
+
+PASO 5
+Compilar.
+
+PASO 6
+Crear tests si son aplicables.
+
+PASO 7
+Validar CSV.
+
+PASO 8
+Implementar FASE 5B.2.
+
+PASO 9
+Verificar SPA y BLE.
+
+PASO 10
+Implementar FASE 5B.3.
+
+PASO 11
+Validar transferencia.
+
+PASO 12
+Actualizar documentación.
+
+PASO 13
+Compilar firmware final.
+
+PASO 14
+Ejecutar pruebas disponibles.
+
+PASO 15
+Revisar warnings y errores JS.
+
+PASO 16
+Mostrar resumen final:
+
+- arquitectura implementada
+- archivos nuevos
+- archivos modificados
+- protocolo BLE añadido
+- formato CSV final
+- política de flush
+- comportamiento disconnect
+- transferencia de archivos
+- tests realizados
+- pruebas pendientes en hardware
+
+==================================================
+60. PRIORIDADES
+==================================================
+
+Prioridad 1:
+No romper adquisición actual.
+
+Prioridad 2:
+Integridad de los datos.
+
+Prioridad 3:
+No bloquear sensor/BLE.
+
+Prioridad 4:
+Trazabilidad del CSV.
+
+Prioridad 5:
+Robustez ante errores.
+
+Prioridad 6:
+UI clara y consistente.
+
+Prioridad 7:
+Eficiencia de Flash.
+
+Evitar:
+- sobrearquitectura
+- dependencias externas innecesarias
+- memoria dinámica innecesaria
+- duplicación de datos
+- duplicación de adquisición
+- protocolo BLE innecesariamente complejo
+
+==================================================
+RESULTADO FINAL ESPERADO
+==================================================
+
+Al finalizar quiero poder:
+
+1. conectar al dispositivo
+2. iniciar Measurement
+3. observar el histograma normalmente
+4. entrar en Data
+5. escribir un Session Name
+6. pulsar START RECORDING
+7. volver a Measurement
+8. ver indicador RECORDING
+9. dejar registrar muestras
+10. volver a Data
+11. ver samples / elapsed / size
+12. pulsar STOP RECORDING
+13. ver el CSV en Stored Files
+14. seleccionar el CSV
+15. descargarlo al navegador
+16. abrirlo con Excel/Python
+17. comprobar que contiene las mismas muestras vistas en Measurement/Debug
+18. conservar archivos después de reset
+19. eliminar archivos cuando ya no sean necesarios
+
+Todo ello sin introducir todavía ninguna lógica de calibración.
